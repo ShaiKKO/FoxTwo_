@@ -40,7 +40,8 @@
 
 #include "win11_monitor_mgr.h"
 #include "monitor_internal.h"
-#include "iop_mc.h"   /* Structure parser: IopIsValidMcBufferEntry, IopQueryMcBufferEntry */
+#include "iop_mc.h"           /* Structure parser: IopIsValidMcBufferEntry, IopQueryMcBufferEntry */
+#include "telemetry_ringbuf.h" /* Ring buffer telemetry (E1) */
 
 #pragma warning(push)
 #pragma warning(disable: 4201) /* nameless struct/union in SAL headers */
@@ -77,6 +78,12 @@ static NTSTATUS MonIoctlGetOffsetStatus(_Out_writes_bytes_(sizeof(MON_OFFSET_STA
 static NTSTATUS MonIoctlGetIoRingHandles(_Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
 static NTSTATUS MonIoctlSetMaskPolicy(_In_reads_bytes_(sizeof(MON_MASK_POLICY_INPUT)) PVOID In, _In_ ULONG InLen);
 static NTSTATUS MonIoctlGetRateStats(_Out_writes_bytes_(sizeof(MON_RATE_LIMIT_STATS)) PVOID Out, _In_ ULONG OutLen);
+
+/* Ring buffer IOCTLs (E1) */
+static NTSTATUS MonIoctlRingBufConfigure(_In_reads_bytes_(sizeof(MON_RINGBUF_CONFIG_INPUT)) PVOID In, _In_ ULONG InLen);
+static NTSTATUS MonIoctlRingBufSnapshot(_Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+static NTSTATUS MonIoctlRingBufGetStats(_Out_writes_bytes_(sizeof(MON_RINGBUF_STATS_OUTPUT)) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlRingBufClear(VOID);
 
 /* Timer DPC -> schedules pool scan work */
 _Function_class_(KDEFERRED_ROUTINE)
@@ -123,6 +130,14 @@ DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
         return status;
     }
 
+    /* Initialize dynamic offset resolver (E2) */
+    status = MonOffsetResolverInitialize(NULL);
+    if (!NT_SUCCESS(status)) {
+        /* Non-fatal: continue without dynamic offset resolution */
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+            "[WIN11MON] Offset resolver init failed: 0x%08X\n", status);
+    }
+
     /* Initialize IoRing enumeration subsystem (A1) */
     status = MonIoRingEnumInitialize();
     if (!NT_SUCCESS(status)) {
@@ -163,6 +178,14 @@ DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
             "[WIN11MON] Rate limit cleanup timer init failed: 0x%08X\n", status);
     }
 
+    /* Initialize ring buffer telemetry (E1) - uses default 1MB size */
+    status = MonRingBufferInitialize(0);
+    if (!NT_SUCCESS(status)) {
+        /* Non-fatal: continue without ring buffer telemetry */
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+            "[WIN11MON] Ring buffer init failed: 0x%08X\n", status);
+    }
+
     /* Timer/DPC for periodic scanning */
     KeInitializeTimer(&g_Mon.ScanTimer);
     KeInitializeDpc(&g_Mon.ScanDpc, MonScanDpc, &g_Mon);
@@ -193,10 +216,12 @@ MonDriverUnload(PDRIVER_OBJECT DriverObject)
     MonTelemetryShutdown(&g_Mon);
 
     /* Shutdown enhancement subsystems (reverse order of init) */
+    MonRingBufferShutdown();  /* E1: Ring buffer */
     MonRateLimitShutdown();
     MonAddrMaskShutdown();
     MonEtwShutdown();
     MonIoRingEnumShutdown();
+    MonOffsetResolverShutdown();  /* E2: Offset resolver */
 
     /* Tear down queues */
     MonDestroyQueues(&g_Mon);
@@ -328,6 +353,24 @@ MonIrpDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp)
         bytesOut = NT_SUCCESS(status) ? sizeof(MON_RATE_LIMIT_STATS) : 0;
         break;
 
+    /* Ring buffer IOCTLs (E1) */
+    case IOCTL_MONITOR_RINGBUF_CONFIGURE:
+        status = MonIoctlRingBufConfigure(inBuf, inLen);
+        break;
+
+    case IOCTL_MONITOR_RINGBUF_SNAPSHOT:
+        status = MonIoctlRingBufSnapshot(outBuf, outLen, &bytesOut);
+        break;
+
+    case IOCTL_MONITOR_RINGBUF_GET_STATS:
+        status = MonIoctlRingBufGetStats(outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_RINGBUF_STATS_OUTPUT) : 0;
+        break;
+
+    case IOCTL_MONITOR_RINGBUF_CLEAR:
+        status = MonIoctlRingBufClear();
+        break;
+
     default:
         status = STATUS_INVALID_DEVICE_REQUEST;
         break;
@@ -395,6 +438,11 @@ static NTSTATUS MonIoctlGetCaps(PVOID Out, ULONG OutLen)
     /* D1: MITRE ATT&CK tagging - always available with ETW */
     if (MonEtwIsEnabled()) {
         caps |= WIN11MON_CAP_ATTACK_TAGGING;
+    }
+
+    /* E1: Ring buffer telemetry */
+    if (MonRingBufferIsInitialized()) {
+        caps |= WIN11MON_CAP_RING_BUFFER;
     }
 
     RtlCopyMemory(Out, &caps, sizeof(caps));
@@ -540,29 +588,68 @@ static NTSTATUS MonIoctlGetOffsetStatus(PVOID Out, ULONG OutLen)
     if (Out == NULL) return STATUS_INVALID_PARAMETER;
     if (OutLen < sizeof(MON_OFFSET_STATUS_OUTPUT)) return STATUS_BUFFER_TOO_SMALL;
 
-    MON_OFFSET_STATUS_OUTPUT status = {0};
-    status.Size = sizeof(MON_OFFSET_STATUS_OUTPUT);
+    MON_OFFSET_STATUS_OUTPUT outStatus = {0};
+    outStatus.Size = sizeof(MON_OFFSET_STATUS_OUTPUT);
 
-    const MON_IORING_TYPE_INFO* typeInfo = MonGetIoRingTypeInfo();
-    if (typeInfo != NULL) {
-        status.WindowsBuildNumber = typeInfo->WindowsBuild;
-    }
+    /* Use offset resolver for build and source info (E2) */
+    if (MonOffsetResolverIsInitialized()) {
+        MON_OFFSET_RESOLVER_STATS resolverStats = {0};
+        MonOffsetResolverGetStats(&resolverStats);
+        outStatus.WindowsBuildNumber = resolverStats.CurrentBuild;
 
-    const IORING_OFFSET_TABLE* offsets = MonGetIoRingOffsets();
-    if (offsets != NULL) {
-        status.Method = MonOffsetMethod_Embedded;
-        status.IoRingOffsetsValid = TRUE;
-        status.IoRingStructureSize = offsets->StructureSize;
+        /* Map resolver source to public method enum */
+        MON_OFFSET_SOURCE source = MonGetOffsetSource(MON_STRUCT_IORING_OBJECT);
+        switch (source) {
+        case MonOffsetSource_Embedded:
+            outStatus.Method = MonOffsetMethod_Embedded;
+            break;
+        case MonOffsetSource_Signature:
+            outStatus.Method = MonOffsetMethod_Detected;
+            break;
+        case MonOffsetSource_Inferred:
+            outStatus.Method = MonOffsetMethod_Embedded; /* Treat inferred as embedded variant */
+            break;
+        default:
+            outStatus.Method = MonOffsetMethod_Degraded;
+            break;
+        }
+
+        /* Check if IORING_OBJECT offsets are available and validated */
+        MON_STRUCTURE_OFFSETS ioringOffsets = {0};
+        NTSTATUS st = MonGetStructureOffsets(MON_STRUCT_IORING_OBJECT, &ioringOffsets);
+        if (NT_SUCCESS(st)) {
+            outStatus.IoRingOffsetsValid = TRUE;
+            outStatus.IoRingStructureSize = ioringOffsets.StructureSize;
+        } else {
+            outStatus.IoRingOffsetsValid = FALSE;
+        }
+
+        if (resolverStats.Degraded) {
+            outStatus.Method = MonOffsetMethod_Degraded;
+        }
     } else {
-        status.Method = MonOffsetMethod_Degraded;
-        status.IoRingOffsetsValid = FALSE;
+        /* Fallback to legacy path */
+        const MON_IORING_TYPE_INFO* typeInfo = MonGetIoRingTypeInfo();
+        if (typeInfo != NULL) {
+            outStatus.WindowsBuildNumber = typeInfo->WindowsBuild;
+        }
+
+        const IORING_OFFSET_TABLE* offsets = MonGetIoRingOffsets();
+        if (offsets != NULL) {
+            outStatus.Method = MonOffsetMethod_Embedded;
+            outStatus.IoRingOffsetsValid = TRUE;
+            outStatus.IoRingStructureSize = offsets->StructureSize;
+        } else {
+            outStatus.Method = MonOffsetMethod_Degraded;
+            outStatus.IoRingOffsetsValid = FALSE;
+        }
     }
 
     /* IOP_MC offsets are always embedded */
-    status.IopMcOffsetsValid = TRUE;
-    status.IopMcStructureSize = IOP_MC_BUFFER_ENTRY_SIZE;
+    outStatus.IopMcOffsetsValid = TRUE;
+    outStatus.IopMcStructureSize = IOP_MC_BUFFER_ENTRY_SIZE;
 
-    RtlCopyMemory(Out, &status, sizeof(status));
+    RtlCopyMemory(Out, &outStatus, sizeof(outStatus));
     return STATUS_SUCCESS;
 }
 
@@ -627,6 +714,117 @@ static NTSTATUS MonIoctlGetRateStats(PVOID Out, ULONG OutLen)
     output->GlobalLimitPerSec = internalStats.GlobalLimitPerSec;
     output->PerProcessLimitPerSec = internalStats.PerProcessLimitPerSec;
 
+    return STATUS_SUCCESS;
+}
+
+/*---------------------------------------------------------------------------
+ * Ring Buffer IOCTL Implementations (E1)
+ *-------------------------------------------------------------------------*/
+
+/**
+ * @function   MonIoctlRingBufConfigure
+ * @purpose    Configure ring buffer size (E1 enhancement)
+ * @note       Currently only logs the request - resize requires restart
+ */
+static NTSTATUS MonIoctlRingBufConfigure(PVOID In, ULONG InLen)
+{
+    if (In == NULL || InLen < sizeof(MON_RINGBUF_CONFIG_INPUT)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    const MON_RINGBUF_CONFIG_INPUT* input = (const MON_RINGBUF_CONFIG_INPUT*)In;
+    if (input->Size != sizeof(MON_RINGBUF_CONFIG_INPUT)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (input->Flags != 0) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    /*
+     * Note: Ring buffer resize requires reinitialization which would lose
+     * existing events. For now, just log the request. A future enhancement
+     * could support runtime resize with event migration.
+     */
+    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+        "[WIN11MON][RING] Configure request: size=%lu (current init=%s)\n",
+        input->BufferSizeBytes,
+        MonRingBufferIsInitialized() ? "YES" : "NO");
+
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlRingBufSnapshot
+ * @purpose    Non-destructive copy of ring buffer contents (E1 enhancement)
+ */
+static NTSTATUS MonIoctlRingBufSnapshot(PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    *BytesOut = 0;
+
+    if (Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonRingBufferIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    NTSTATUS status = MonRingBufferSnapshot(Out, OutLen, BytesOut);
+    return status;
+}
+
+/**
+ * @function   MonIoctlRingBufGetStats
+ * @purpose    Get ring buffer statistics (E1 enhancement)
+ */
+static NTSTATUS MonIoctlRingBufGetStats(PVOID Out, ULONG OutLen)
+{
+    if (Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (OutLen < sizeof(MON_RINGBUF_STATS_OUTPUT)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    if (!MonRingBufferIsInitialized()) {
+        /* Return zeroed stats if not initialized */
+        RtlZeroMemory(Out, sizeof(MON_RINGBUF_STATS_OUTPUT));
+        ((PMON_RINGBUF_STATS_OUTPUT)Out)->Size = sizeof(MON_RINGBUF_STATS_OUTPUT);
+        return STATUS_SUCCESS;
+    }
+
+    MON_RING_BUFFER_STATS internalStats = {0};
+    MonRingBufferGetStats(&internalStats);
+
+    /* Map to public structure */
+    MON_RINGBUF_STATS_OUTPUT* output = (MON_RINGBUF_STATS_OUTPUT*)Out;
+    output->Size = sizeof(MON_RINGBUF_STATS_OUTPUT);
+    output->BufferSizeBytes = internalStats.BufferSizeBytes;
+    output->UsedBytes = internalStats.UsedBytes;
+    output->FreeBytes = internalStats.FreeBytes;
+    output->EventCount = internalStats.EventCount;
+    output->TotalEventsWritten = internalStats.TotalEventsWritten;
+    output->EventsOverwritten = internalStats.EventsOverwritten;
+    output->EventsDropped = internalStats.EventsDropped;
+    output->WrapCount = internalStats.WrapCount;
+    output->OldestTimestamp = internalStats.OldestTimestamp.QuadPart;
+    output->NewestTimestamp = internalStats.NewestTimestamp.QuadPart;
+
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlRingBufClear
+ * @purpose    Clear all events from ring buffer (E1 enhancement)
+ */
+static NTSTATUS MonIoctlRingBufClear(VOID)
+{
+    if (!MonRingBufferIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    MonRingBufferClear();
     return STATUS_SUCCESS;
 }
 

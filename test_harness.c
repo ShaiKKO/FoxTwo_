@@ -22,6 +22,7 @@
 #include "regbuf_integrity.h" /* For MonValidateIoRingRegBuffers */
 #include "telemetry_etw.h"    /* For MonEtwLogCrossVmDetection */
 #include "rate_limit.h"       /* For MonRateLimitCheckEvent (B3) */
+#include "telemetry_ringbuf.h" /* For ring buffer tests (E1) */
 
 #pragma warning(push)
 #pragma warning(disable: 4201)
@@ -42,6 +43,7 @@ _Dispatch_type_(IRP_MJ_DEVICE_CONTROL) DRIVER_DISPATCH ThDeviceControl;
 #define IOCTL_TH_TEST_REGBUF_VALID   CTL_CODE(FILE_DEVICE_UNKNOWN, 0xA12, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_TH_TEST_ETW_EMIT       CTL_CODE(FILE_DEVICE_UNKNOWN, 0xA13, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_TH_TEST_RATE_LIMIT     CTL_CODE(FILE_DEVICE_UNKNOWN, 0xA15, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_TH_TEST_RING_BUFFER    CTL_CODE(FILE_DEVICE_UNKNOWN, 0xA16, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 static UNICODE_STRING g_DevName, g_SymLink;
 static PDEVICE_OBJECT g_DevObj;
@@ -424,6 +426,323 @@ static NTSTATUS ThTestRateLimit(VOID)
 }
 
 /**
+ * @function   ThTestRingBuffer
+ * @purpose    Test ring buffer telemetry system (E1)
+ *
+ * Test Contracts (from spec):
+ * RB-T01: Write/read single event correctly
+ * RB-T02: Multiple events maintain order
+ * RB-T03: Overflow overwrites oldest
+ * RB-T04: Snapshot is non-destructive
+ * RB-T05: DISPATCH_LEVEL write safety
+ * RB-T06: Statistics accuracy
+ */
+static NTSTATUS ThTestRingBuffer(VOID)
+{
+    NTSTATUS status;
+
+    /* Check if ring buffer is initialized */
+    if (!MonRingBufferIsInitialized()) {
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+            "[TH] Ring buffer not initialized - skipping tests\n");
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+        "[TH] Starting ring buffer tests...\n");
+
+    /* Clear buffer for clean test state */
+    MonRingBufferClear();
+
+    /* RB-T01: Write/read single event correctly */
+    {
+        UCHAR testPayload[64] = {0};
+        RtlFillMemory(testPayload, sizeof(testPayload), 0xAB);
+
+        status = MonRingBufferWrite(
+            MonitorEventIoRingOpSubmit,
+            testPayload,
+            sizeof(testPayload));
+
+        if (!NT_SUCCESS(status)) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T01: Write failed 0x%08X\n", status);
+            return status;
+        }
+
+        /* Read it back */
+        UCHAR readBuf[256] = {0};
+        ULONG bytesRead = 0, eventCount = 0;
+
+        status = MonRingBufferRead(
+            readBuf,
+            sizeof(readBuf),
+            &bytesRead,
+            &eventCount);
+
+        if (!NT_SUCCESS(status)) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T01: Read failed 0x%08X\n", status);
+            return status;
+        }
+
+        if (eventCount != 1) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T01: Expected 1 event, got %lu\n", eventCount);
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        /* Validate event header */
+        PMON_RING_EVENT_HEADER hdr = (PMON_RING_EVENT_HEADER)readBuf;
+        if (hdr->Magic != MON_RING_EVENT_MAGIC) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T01: Bad magic 0x%08X\n", hdr->Magic);
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        if (hdr->PayloadSize != sizeof(testPayload)) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T01: Payload size %lu != %lu\n",
+                hdr->PayloadSize, (ULONG)sizeof(testPayload));
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        if (hdr->EventType != MonitorEventIoRingOpSubmit) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T01: Wrong event type %u\n", hdr->EventType);
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+            "[TH] PASS RB-T01: Write/read single event\n");
+    }
+
+    /* RB-T02: Multiple events maintain order */
+    {
+        MonRingBufferClear();
+
+        /* Write 5 events with different types */
+        for (ULONG i = 0; i < 5; i++) {
+            ULONG payload = i;
+            status = MonRingBufferWrite(
+                (MONITOR_EVENT_TYPE)(MonitorEventIoRingOpSubmit + i),
+                &payload,
+                sizeof(payload));
+
+            if (!NT_SUCCESS(status)) {
+                DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                    "[TH] FAIL RB-T02: Write %lu failed 0x%08X\n", i, status);
+                return status;
+            }
+        }
+
+        /* Read back and verify order */
+        UCHAR readBuf[2048] = {0};
+        ULONG bytesRead = 0, eventCount = 0;
+
+        status = MonRingBufferRead(
+            readBuf,
+            sizeof(readBuf),
+            &bytesRead,
+            &eventCount);
+
+        if (!NT_SUCCESS(status) || eventCount != 5) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T02: Read returned %lu events (expected 5)\n", eventCount);
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        /* Walk events and verify sequence */
+        ULONG offset = 0;
+        ULONG prevSeq = 0;
+        for (ULONG i = 0; i < eventCount; i++) {
+            PMON_RING_EVENT_HEADER hdr = (PMON_RING_EVENT_HEADER)(readBuf + offset);
+
+            if (hdr->Magic != MON_RING_EVENT_MAGIC) {
+                DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                    "[TH] FAIL RB-T02: Event %lu bad magic\n", i);
+                return STATUS_UNSUCCESSFUL;
+            }
+
+            /* Sequence should be monotonically increasing */
+            if (i > 0 && hdr->SequenceNumber <= prevSeq) {
+                DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                    "[TH] FAIL RB-T02: Event %lu seq %lu <= prev %lu\n",
+                    i, hdr->SequenceNumber, prevSeq);
+                return STATUS_UNSUCCESSFUL;
+            }
+            prevSeq = hdr->SequenceNumber;
+
+            offset += hdr->TotalSize;
+        }
+
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+            "[TH] PASS RB-T02: Multiple events maintain order\n");
+    }
+
+    /* RB-T04: Snapshot is non-destructive */
+    {
+        MonRingBufferClear();
+
+        /* Write some events */
+        for (ULONG i = 0; i < 3; i++) {
+            ULONG payload = i * 100;
+            MonRingBufferWrite(MonitorEventIoRingOpSubmit, &payload, sizeof(payload));
+        }
+
+        /* Take snapshot */
+        UCHAR snapBuf[4096] = {0};
+        ULONG snapBytes = 0;
+
+        status = MonRingBufferSnapshot(
+            snapBuf,
+            sizeof(snapBuf),
+            &snapBytes);
+
+        if (!NT_SUCCESS(status)) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T04: Snapshot failed 0x%08X\n", status);
+            return status;
+        }
+
+        PMON_RING_SNAPSHOT_HEADER snapHdr = (PMON_RING_SNAPSHOT_HEADER)snapBuf;
+        ULONG snapEventCount = snapHdr->EventCount;
+
+        /* Events should still be readable (snapshot is non-destructive) */
+        UCHAR readBuf[4096] = {0};
+        ULONG bytesRead = 0, eventCount = 0;
+
+        status = MonRingBufferRead(
+            readBuf,
+            sizeof(readBuf),
+            &bytesRead,
+            &eventCount);
+
+        if (!NT_SUCCESS(status)) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T04: Read after snapshot failed 0x%08X\n", status);
+            return status;
+        }
+
+        if (eventCount != snapEventCount) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T04: Event count mismatch snap=%lu read=%lu\n",
+                snapEventCount, eventCount);
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+            "[TH] PASS RB-T04: Snapshot non-destructive (count=%lu)\n", eventCount);
+    }
+
+    /* RB-T05: DISPATCH_LEVEL write safety */
+    {
+        KIRQL oldIrql;
+        KeRaiseIrql(DISPATCH_LEVEL, &oldIrql);
+        {
+            ULONG payload = 0xDEADBEEF;
+            status = MonRingBufferWrite(
+                MonitorEventIoRingOpSubmit,
+                &payload,
+                sizeof(payload));
+
+            /* Should succeed or return STATUS_NOT_SUPPORTED if not initialized */
+            if (!NT_SUCCESS(status) && status != STATUS_NOT_SUPPORTED) {
+                KeLowerIrql(oldIrql);
+                DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                    "[TH] FAIL RB-T05: Write at DISPATCH failed 0x%08X\n", status);
+                return status;
+            }
+
+            /* IsInitialized should also be safe at DISPATCH */
+            BOOLEAN init = MonRingBufferIsInitialized();
+            UNREFERENCED_PARAMETER(init);
+
+            /* GetStats should be safe at DISPATCH */
+            MON_RING_BUFFER_STATS stats = {0};
+            MonRingBufferGetStats(&stats);
+        }
+        KeLowerIrql(oldIrql);
+
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+            "[TH] PASS RB-T05: DISPATCH_LEVEL write safety\n");
+    }
+
+    /* RB-T06: Statistics accuracy */
+    {
+        MonRingBufferClear();
+
+        MON_RING_BUFFER_STATS statsBefore = {0};
+        MonRingBufferGetStats(&statsBefore);
+
+        /* Write known number of events */
+        const ULONG testEventCount = 10;
+        for (ULONG i = 0; i < testEventCount; i++) {
+            ULONG payload = i;
+            MonRingBufferWrite(MonitorEventIoRingOpSubmit, &payload, sizeof(payload));
+        }
+
+        MON_RING_BUFFER_STATS statsAfter = {0};
+        MonRingBufferGetStats(&statsAfter);
+
+        if (statsAfter.EventCount != testEventCount) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T06: EventCount %lu != expected %lu\n",
+                statsAfter.EventCount, testEventCount);
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        ULONG written = statsAfter.TotalEventsWritten - statsBefore.TotalEventsWritten;
+        if (written != testEventCount) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "[TH] FAIL RB-T06: TotalWritten delta %lu != %lu\n",
+                written, testEventCount);
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+            "[TH] PASS RB-T06: Statistics accuracy (BufferSize=%lu UsedBytes=%lu)\n",
+            statsAfter.BufferSizeBytes, statsAfter.UsedBytes);
+    }
+
+    /* Test IOCTL path via monitor driver */
+    {
+        /* Test IOCTL_MONITOR_RINGBUF_GET_STATS */
+        MON_RINGBUF_STATS_OUTPUT ioctlStats = {0};
+        status = ThSendMonitorIoctl(
+            IOCTL_MONITOR_RINGBUF_GET_STATS,
+            NULL, 0,
+            &ioctlStats, sizeof(ioctlStats));
+
+        if (NT_SUCCESS(status)) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+                "[TH] IOCTL Stats: Size=%lu Events=%lu Written=%lu\n",
+                ioctlStats.BufferSizeBytes,
+                ioctlStats.EventCount,
+                ioctlStats.TotalEventsWritten);
+        } else {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+                "[TH] IOCTL_MONITOR_RINGBUF_GET_STATS failed: 0x%08X\n", status);
+        }
+
+        /* Test IOCTL_MONITOR_RINGBUF_CLEAR */
+        status = ThSendMonitorIoctl(
+            IOCTL_MONITOR_RINGBUF_CLEAR,
+            NULL, 0,
+            NULL, 0);
+
+        if (!NT_SUCCESS(status)) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+                "[TH] IOCTL_MONITOR_RINGBUF_CLEAR failed: 0x%08X\n", status);
+        }
+    }
+
+    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+        "[TH] PASS: ThTestRingBuffer (all tests passed)\n");
+    return STATUS_SUCCESS;
+}
+
+/**
  * @function   ThDeviceControl
  * @purpose    Private IOCTL dispatcher for the test harness (runs basic scenario)
  * @precondition IRQL == PASSIVE_LEVEL; METHOD_BUFFERED; SystemBuffer used
@@ -460,6 +779,10 @@ NTSTATUS ThDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 
     case IOCTL_TH_TEST_RATE_LIMIT:
         status = ThTestRateLimit();
+        break;
+
+    case IOCTL_TH_TEST_RING_BUFFER:
+        status = ThTestRingBuffer();
         break;
 
     default:

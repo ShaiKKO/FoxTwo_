@@ -23,6 +23,7 @@
 #include <ntifs.h>
 #include "ioring_enum.h"
 #include "monitor_internal.h"
+#include "offset_resolver.h"  /* E2: Dynamic offset resolution */
 
 #pragma warning(push)
 #pragma warning(disable: 4201 4214)
@@ -114,10 +115,51 @@ static const IORING_OFFSET_TABLE* g_CurrentOffsets = NULL;
 /**
  * @function   MonFindOffsetsForBuild
  * @purpose    Locate offset table entry for a specific build number
+ *
+ * Note: This function first checks if the offset_resolver (E2) has offsets
+ * available, and if so, synthesizes an IORING_OFFSET_TABLE from them.
+ * This allows ioring_enum.c to benefit from the expanded offset tables
+ * and inference capabilities of the offset resolver while maintaining
+ * backward compatibility with the existing API.
  */
 static const IORING_OFFSET_TABLE*
 MonFindOffsetsForBuild(_In_ ULONG BuildNumber)
 {
+    /* Static table to return from resolver-based lookup */
+    static IORING_OFFSET_TABLE s_ResolverOffsets = {0};
+
+    /* First, try the offset resolver (E2) if available */
+    if (MonOffsetResolverIsInitialized()) {
+        MON_STRUCTURE_OFFSETS ioringOffsets = {0};
+        NTSTATUS status = MonGetStructureOffsets(MON_STRUCT_IORING_OBJECT, &ioringOffsets);
+
+        if (NT_SUCCESS(status) && ioringOffsets.FieldCount >= 4) {
+            /* Synthesize IORING_OFFSET_TABLE from resolver data */
+            s_ResolverOffsets.BuildNumber = ioringOffsets.TargetBuild;
+            s_ResolverOffsets.StructureSize = ioringOffsets.StructureSize;
+
+            /* Find each field by name */
+            for (ULONG i = 0; i < ioringOffsets.FieldCount; i++) {
+                if (_stricmp(ioringOffsets.Fields[i].FieldName, MON_FIELD_REGBUFFERS_COUNT) == 0) {
+                    s_ResolverOffsets.RegBuffersCountOffset = ioringOffsets.Fields[i].Offset;
+                } else if (_stricmp(ioringOffsets.Fields[i].FieldName, MON_FIELD_REGBUFFERS) == 0) {
+                    s_ResolverOffsets.RegBuffersOffset = ioringOffsets.Fields[i].Offset;
+                } else if (_stricmp(ioringOffsets.Fields[i].FieldName, MON_FIELD_REGFILES_COUNT) == 0) {
+                    s_ResolverOffsets.RegFilesCountOffset = ioringOffsets.Fields[i].Offset;
+                } else if (_stricmp(ioringOffsets.Fields[i].FieldName, MON_FIELD_REGFILES) == 0) {
+                    s_ResolverOffsets.RegFilesOffset = ioringOffsets.Fields[i].Offset;
+                }
+            }
+
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+                "[WIN11MON][IORING] Using offsets from resolver (build %lu, source=%u)\n",
+                ioringOffsets.TargetBuild, ioringOffsets.OverallSource);
+
+            return &s_ResolverOffsets;
+        }
+    }
+
+    /* Fallback to embedded table lookup */
     for (ULONG i = 0; g_IoRingOffsets[i].BuildNumber != 0; i++) {
         if (g_IoRingOffsets[i].BuildNumber == BuildNumber) {
             return &g_IoRingOffsets[i];

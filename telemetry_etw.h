@@ -112,6 +112,7 @@ typedef enum _MON_ETW_EVENT_ID {
     MonEtwEvent_MonitoringEnabled = 402,
     MonEtwEvent_MonitoringDisabled = 403,
     MonEtwEvent_OffsetResolutionFailed = 404,
+    MonEtwEvent_RingBufferCreated = 405,
 
     MonEtwEvent_Max
 } MON_ETW_EVENT_ID;

@@ -34,6 +34,7 @@
  #include "telemetry_etw.h" /* ETW TraceLogging provider (B1). */
  #include "addr_mask.h"     /* Address masking (B2). */
  #include "rate_limit.h"    /* Per-process rate limiting (B3). */
+ #include "offset_resolver.h" /* Dynamic offset resolution (E2). */
 
  #ifndef _In_
  #define _In_

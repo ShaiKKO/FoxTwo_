@@ -20,6 +20,7 @@
 
 #include <ntddk.h>
 #include "monitor_internal.h"
+#include "telemetry_ringbuf.h"  /* Ring buffer telemetry (E1) */
 
 /* Queue an EVENT_BLOB into the global SLIST (if telemetry enabled) */
 /**
@@ -147,5 +148,20 @@ VOID MonTelemetryLogBlob(_In_ MONITOR_EVENT_TYPE Type, _In_reads_bytes_opt_(Payl
         return;
     }
 
+    /* Dual-write: queue to SLIST for IOCTL_MONITOR_FETCH_EVENTS (legacy) */
     EnqueueEventBlob(Type, Payload, PayloadLen);
+
+    /*
+     * E1 Enhancement: Also write to ring buffer for persistent storage.
+     * Ring buffer provides fixed memory footprint with automatic overwrite
+     * of oldest events, snapshot capability, and better performance under
+     * high event rates.
+     *
+     * Both paths are maintained for backward compatibility:
+     * - SLIST: Consumed by IOCTL_MONITOR_FETCH_EVENTS (drains queue)
+     * - Ring buffer: Accessed via IOCTL_MONITOR_RINGBUF_SNAPSHOT (non-destructive)
+     */
+    if (MonRingBufferIsInitialized()) {
+        (VOID)MonRingBufferWrite(Type, Payload, PayloadLen);
+    }
 }

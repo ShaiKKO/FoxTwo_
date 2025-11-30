@@ -63,6 +63,7 @@ extern "C" {
 #define WIN11MON_CAP_PERPROC_RATELIMIT     0x00000400u  /* B3: Per-process rate limiting */
 #define WIN11MON_CAP_RUNTIME_OFFSETS       0x00000800u  /* C1: Runtime offset resolution */
 #define WIN11MON_CAP_ATTACK_TAGGING        0x00001000u  /* D1: MITRE ATT&CK tagging */
+#define WIN11MON_CAP_RING_BUFFER           0x00002000u  /* E1: Ring buffer telemetry */
 
 /* IOCTL Contracts (METHOD_BUFFERED, FILE_DEVICE_UNKNOWN) ----------------- */
 
@@ -108,6 +109,32 @@ extern "C" {
  *  - Output: MON_RATE_LIMIT_STATS
  */
 #define IOCTL_MONITOR_GET_RATE_STATS       CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x0E, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* Ring Buffer IOCTLs (v1.2+) -------------------------------------------------*/
+
+/* IOCTL_MONITOR_RINGBUF_CONFIGURE
+ *  - Configure ring buffer size (requires restart to apply new size).
+ *  - Input: MON_RINGBUF_CONFIG_INPUT
+ */
+#define IOCTL_MONITOR_RINGBUF_CONFIGURE    CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x10, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* IOCTL_MONITOR_RINGBUF_SNAPSHOT
+ *  - Non-destructive copy of ring buffer contents.
+ *  - Output: MON_RINGBUF_SNAPSHOT_OUTPUT (header + events)
+ */
+#define IOCTL_MONITOR_RINGBUF_SNAPSHOT     CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x11, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_RINGBUF_GET_STATS
+ *  - Get ring buffer statistics.
+ *  - Output: MON_RINGBUF_STATS_OUTPUT
+ */
+#define IOCTL_MONITOR_RINGBUF_GET_STATS    CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x12, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_RINGBUF_CLEAR
+ *  - Clear all events from the ring buffer.
+ *  - No input/output.
+ */
+#define IOCTL_MONITOR_RINGBUF_CLEAR        CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x13, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 
 /*--------------------------------------------------------------------------*/
 /* Public Data Schemas                                                      */
@@ -254,6 +281,60 @@ typedef struct _MON_IORING_HANDLE_INFO {
     ULONG   RegBuffersCount;
     ULONG   ViolationFlags;
 } MON_IORING_HANDLE_INFO, *PMON_IORING_HANDLE_INFO;
+
+/*--------------------------------------------------------------------------*/
+/* Ring Buffer Schemas (v1.2+)                                              */
+/*--------------------------------------------------------------------------*/
+
+/* Ring buffer configuration input */
+typedef struct _MON_RINGBUF_CONFIG_INPUT {
+    ULONG   Size;                       /* Must be sizeof(MON_RINGBUF_CONFIG_INPUT) */
+    ULONG   BufferSizeBytes;            /* 0 = use default (1MB) */
+    ULONG   Flags;                      /* Reserved, must be 0 */
+} MON_RINGBUF_CONFIG_INPUT, *PMON_RINGBUF_CONFIG_INPUT;
+
+/* Ring buffer statistics output */
+typedef struct _MON_RINGBUF_STATS_OUTPUT {
+    ULONG   Size;                       /* sizeof(MON_RINGBUF_STATS_OUTPUT) */
+    ULONG   BufferSizeBytes;            /* Total buffer allocation */
+    ULONG   UsedBytes;                  /* Bytes currently used */
+    ULONG   FreeBytes;                  /* Bytes available */
+    ULONG   EventCount;                 /* Events in buffer */
+    ULONG   TotalEventsWritten;         /* Lifetime event count */
+    ULONG   EventsOverwritten;          /* Events lost to overwrite */
+    ULONG   EventsDropped;              /* Events dropped (too large) */
+    ULONG   WrapCount;                  /* Buffer wrap-around count */
+    ULONG64 OldestTimestamp;            /* Oldest event timestamp */
+    ULONG64 NewestTimestamp;            /* Newest event timestamp */
+} MON_RINGBUF_STATS_OUTPUT, *PMON_RINGBUF_STATS_OUTPUT;
+
+/* Ring buffer snapshot header (returned at start of snapshot) */
+typedef struct _MON_RINGBUF_SNAPSHOT_OUTPUT {
+    ULONG   Size;                       /* sizeof(MON_RINGBUF_SNAPSHOT_OUTPUT) */
+    ULONG   EventCount;                 /* Events in snapshot */
+    ULONG   TotalBytes;                 /* Total bytes including header */
+    ULONG   Flags;                      /* Reserved */
+    ULONG64 SnapshotTime;               /* When snapshot was taken */
+    ULONG64 OldestEventTime;            /* Oldest event timestamp */
+    ULONG64 NewestEventTime;            /* Newest event timestamp */
+    ULONG   FirstSequence;              /* First event sequence number */
+    ULONG   LastSequence;               /* Last event sequence number */
+    /* Events follow immediately after this header */
+} MON_RINGBUF_SNAPSHOT_OUTPUT, *PMON_RINGBUF_SNAPSHOT_OUTPUT;
+
+/* Ring buffer event header (stored in ring and returned in snapshot) */
+typedef struct _MON_RING_EVENT {
+    ULONG              Magic;           /* 'REVT' (0x54564552) for validation */
+    ULONG              TotalSize;       /* Total bytes including header and padding */
+    ULONG              PayloadSize;     /* Actual payload bytes */
+    MONITOR_EVENT_TYPE EventType;       /* Event type enum */
+    ULONG64            Timestamp;       /* System time in 100ns units */
+    ULONG              ProcessId;       /* Source process ID */
+    ULONG              ThreadId;        /* Source thread ID */
+    ULONG              SequenceNumber;  /* Monotonic sequence for ordering */
+    ULONG              Reserved;        /* Alignment padding */
+    /* Payload follows immediately */
+} MON_RING_EVENT, *PMON_RING_EVENT;
 
 #ifdef __cplusplus
 } /* extern "C" */
