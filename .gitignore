@@ -1,0 +1,37 @@
+# Build output directories
+/x64/
+/Debug/
+/Release/
+/ipch/
+/buildTools/
+
+# Visual Studio / MSBuild metadata
+/.vs/
+
+
+# Compiler / linker intermediates
+*.obj
+*.i
+*.pch
+*.idb
+*.pdb
+*.tlog
+*.log
+*.ilk
+
+# Binaries
+*.exe
+*.dll
+*.sys
+
+# Visual Studio user-specific files
+*.user
+*.suo
+*.VC.db
+*.VC.VC.opendb
+
+# Other temporary files
+*.tmp
+*.cache
+docs/*
+Win11MonitorMgr/*

@@ -1,0 +1,17 @@
+# Cppcheck suppressions for Windows SAL and kernel annotations
+# Purpose: silence macro-unknown noise so we can focus on real issues
+
+unknownMacro:_In_
+unknownMacro:_In_opt_
+unknownMacro:_Inout_
+unknownMacro:_Out_
+unknownMacro:_Out_opt_
+unknownMacro:_Use_decl_annotations_
+unknownMacro:_Function_class_*
+unknownMacro:_IRQL_requires_max_*
+unknownMacro:_In_reads_bytes_*
+unknownMacro:_In_reads_bytes_opt_*
+unknownMacro:_Out_writes_bytes_*
+unknownMacro:_Out_writes_bytes_to_*
+# Optional: uncomment if your environment lacks system headers during analysis
+# missingIncludeSystem
