@@ -27,12 +27,10 @@ IoRing (I/O Ring) is a high-performance asynchronous I/O interface introduced in
 - **Behavioral profiling** with ML-ready feature extraction
 - **ETW TraceLogging integration** for seamless SIEM compatibility
 
-The driver is developed by ziX Performance Labs and has been tested against real-world CVEs including CVE-2025-21333, CVE-2024-35250, and techniques demonstrated at Pwn2Own 2024/2025.
+The driver has been tested against real-world CVEs including CVE-2025-21333, CVE-2024-35250, and techniques demonstrated at Pwn2Own 2024/2025.
 
 <a name="features"></a>
 ## Key Features
-
-### Implemented Features
 
 | Feature | Module | Description |
 |---------|--------|-------------|
@@ -164,7 +162,7 @@ Fox2_ detects and reports the following attack patterns:
 
 | Build Range | RegBuffers Offset | RegBuffersCount Offset |
 |-------------|-------------------|------------------------|
-| 22621-27000 | 0xB8 | 0xB0 |
+| 22621-27000 |
 
 <a name="build"></a>
 ## Building
@@ -318,18 +316,6 @@ BOOL CALLBACK MyPreSubmitCallback(
 }
 ```
 
-### IOCTL Interface
-
-The driver exposes 40+ IOCTLs across subsystems:
-
-| Category | Example IOCTLs |
-|----------|----------------|
-| **Core** | `IOCTL_MONITOR_ENABLE`, `IOCTL_MONITOR_GET_STATS`, `IOCTL_MONITOR_SCAN_NOW` |
-| **Ring Buffer** | `IOCTL_MONITOR_RINGBUF_SNAPSHOT`, `IOCTL_MONITOR_RINGBUF_GET_STATS` |
-| **Interception** | `IOCTL_MONITOR_INTERCEPT_SET_POLICY`, `IOCTL_MONITOR_INTERCEPT_ADD_BLACKLIST` |
-| **Profiling** | `IOCTL_MONITOR_PROFILE_GET_SUMMARY`, `IOCTL_MONITOR_PROFILE_EXPORT_ML` |
-| **Anomaly** | `IOCTL_MONITOR_ANOMALY_GET_RULE`, `IOCTL_MONITOR_ANOMALY_SET_THRESHOLD` |
-
 <a name="codemap"></a>
 ## Codemap
 
@@ -413,15 +399,6 @@ Fox2_/
 ## Contributing
 
 Contributions to Fox2_ are welcome. This project is open source under the GPL-3.0 license.
-
-### Coding Standards
-
-The project follows the [ziX Labs C Style Guide](docs/ziX-labs-c-style.md):
-
-- CERT C Secure Coding compliance
-- 60-line function limit for maintainability
-- Security-first design with SEH for all untrusted memory access
-- Comprehensive documentation with function contracts (preconditions, postconditions, thread-safety)
 
 ### Testing
 
