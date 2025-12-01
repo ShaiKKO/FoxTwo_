@@ -64,6 +64,9 @@ extern "C" {
 #define WIN11MON_CAP_RUNTIME_OFFSETS       0x00000800u  /* C1: Runtime offset resolution */
 #define WIN11MON_CAP_ATTACK_TAGGING        0x00001000u  /* D1: MITRE ATT&CK tagging */
 #define WIN11MON_CAP_RING_BUFFER           0x00002000u  /* E1: Ring buffer telemetry */
+#define WIN11MON_CAP_IORING_INTERCEPT      0x00004000u  /* Phase 6: IoRing interception */
+#define WIN11MON_CAP_PROCESS_PROFILE       0x00008000u  /* Phase 7: Process profiling */
+#define WIN11MON_CAP_ANOMALY_RULES         0x00010000u  /* Phase 7: Anomaly rule engine */
 
 /* IOCTL Contracts (METHOD_BUFFERED, FILE_DEVICE_UNKNOWN) ----------------- */
 
@@ -135,6 +138,144 @@ extern "C" {
  *  - No input/output.
  */
 #define IOCTL_MONITOR_RINGBUF_CLEAR        CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x13, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* Interception IOCTLs (v1.2+) ------------------------------------------------*/
+
+/* IOCTL_MONITOR_INTERCEPT_VALIDATE
+ *  - Pre-submit validation of IoRing operations.
+ *  - Input: MON_INTERCEPT_REQUEST (variable-length with SQE array)
+ *  - Output: MON_INTERCEPT_RESPONSE
+ */
+#define IOCTL_MONITOR_INTERCEPT_VALIDATE   CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x20, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+/* IOCTL_MONITOR_INTERCEPT_SET_POLICY
+ *  - Configure interception policy.
+ *  - Input: MON_INTERCEPT_POLICY
+ */
+#define IOCTL_MONITOR_INTERCEPT_SET_POLICY CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x21, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* IOCTL_MONITOR_INTERCEPT_GET_POLICY
+ *  - Get current interception policy.
+ *  - Output: MON_INTERCEPT_POLICY
+ */
+#define IOCTL_MONITOR_INTERCEPT_GET_POLICY CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x22, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_INTERCEPT_GET_STATS
+ *  - Get interception statistics.
+ *  - Output: MON_INTERCEPT_STATS
+ */
+#define IOCTL_MONITOR_INTERCEPT_GET_STATS  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x23, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_INTERCEPT_RESET_STATS
+ *  - Reset interception statistics to zero.
+ *  - No input/output.
+ */
+#define IOCTL_MONITOR_INTERCEPT_RESET_STATS CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x24, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* IOCTL_MONITOR_INTERCEPT_ENABLE
+ *  - Enable or disable interception.
+ *  - Input: ULONG (0 = disable, 1 = enable)
+ */
+#define IOCTL_MONITOR_INTERCEPT_ENABLE     CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x25, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* IOCTL_MONITOR_INTERCEPT_ADD_BLACKLIST
+ *  - Add a process to the IoRing blacklist.
+ *  - Input: MON_INTERCEPT_BLACKLIST_ADD_INPUT
+ */
+#define IOCTL_MONITOR_INTERCEPT_ADD_BL     CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x26, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* IOCTL_MONITOR_INTERCEPT_REMOVE_BLACKLIST
+ *  - Remove a process from the blacklist.
+ *  - Input: ULONG (ProcessId)
+ */
+#define IOCTL_MONITOR_INTERCEPT_REMOVE_BL  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x27, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* IOCTL_MONITOR_INTERCEPT_GET_BLACKLIST
+ *  - Enumerate all blacklisted processes.
+ *  - Input: ULONG (MaxEntries)
+ *  - Output: MON_BLACKLIST_ENTRY array
+ */
+#define IOCTL_MONITOR_INTERCEPT_GET_BL     CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x28, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* Profile IOCTLs (v1.2+ Phase 7) ---------------------------------------------*/
+
+/* IOCTL_MONITOR_PROFILE_GET
+ *  - Get profile summary for a specific process.
+ *  - Input: ULONG (ProcessId)
+ *  - Output: MON_PROFILE_SUMMARY
+ */
+#define IOCTL_MONITOR_PROFILE_GET          CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x30, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_PROFILE_LIST
+ *  - Enumerate all active profiles.
+ *  - Input: ULONG (MaxCount)
+ *  - Output: MON_PROFILE_SUMMARY array
+ */
+#define IOCTL_MONITOR_PROFILE_LIST         CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x31, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_PROFILE_EXPORT_ML
+ *  - Export ML feature vector for a process.
+ *  - Input: ULONG (ProcessId)
+ *  - Output: MON_ML_FEATURE_VECTOR
+ */
+#define IOCTL_MONITOR_PROFILE_EXPORT_ML    CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x32, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_PROFILE_GET_STATS
+ *  - Get global profile statistics.
+ *  - Output: MON_PROFILE_STATS
+ */
+#define IOCTL_MONITOR_PROFILE_GET_STATS    CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x33, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_PROFILE_GET_CONFIG
+ *  - Get current profile configuration.
+ *  - Output: MON_PROFILE_CONFIG
+ */
+#define IOCTL_MONITOR_PROFILE_GET_CONFIG   CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x34, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_PROFILE_SET_CONFIG
+ *  - Set profile configuration.
+ *  - Input: MON_PROFILE_CONFIG
+ */
+#define IOCTL_MONITOR_PROFILE_SET_CONFIG   CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x35, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* IOCTL_MONITOR_PROFILE_RESET
+ *  - Reset all profile counters (keeps profiles).
+ *  - No input/output.
+ */
+#define IOCTL_MONITOR_PROFILE_RESET        CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x36, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* Anomaly Rule IOCTLs (v1.2+ Phase 7) ----------------------------------------*/
+
+/* IOCTL_MONITOR_ANOMALY_GET_RULES
+ *  - Enumerate all anomaly rules.
+ *  - Input: ULONG (MaxCount)
+ *  - Output: MON_ANOMALY_RULE_PUBLIC array
+ */
+#define IOCTL_MONITOR_ANOMALY_GET_RULES    CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x38, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_ANOMALY_SET_THRESHOLD
+ *  - Configure threshold for an anomaly rule.
+ *  - Input: MON_ANOMALY_THRESHOLD_INPUT
+ */
+#define IOCTL_MONITOR_ANOMALY_SET_THRESHOLD CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x39, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* IOCTL_MONITOR_ANOMALY_ENABLE_RULE
+ *  - Enable or disable an anomaly rule.
+ *  - Input: MON_ANOMALY_ENABLE_INPUT
+ */
+#define IOCTL_MONITOR_ANOMALY_ENABLE_RULE  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x3A, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* IOCTL_MONITOR_ANOMALY_GET_STATS
+ *  - Get anomaly detection statistics.
+ *  - Output: MON_ANOMALY_STATS_PUBLIC
+ */
+#define IOCTL_MONITOR_ANOMALY_GET_STATS    CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x3B, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_ANOMALY_RESET_STATS
+ *  - Reset anomaly detection statistics.
+ *  - No input/output.
+ */
+#define IOCTL_MONITOR_ANOMALY_RESET_STATS  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x3C, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 
 /*--------------------------------------------------------------------------*/
 /* Public Data Schemas                                                      */
@@ -289,7 +430,7 @@ typedef struct _MON_IORING_HANDLE_INFO {
 /* Ring buffer configuration input */
 typedef struct _MON_RINGBUF_CONFIG_INPUT {
     ULONG   Size;                       /* Must be sizeof(MON_RINGBUF_CONFIG_INPUT) */
-    ULONG   BufferSizeBytes;            /* 0 = use default (1MB) */
+    ULONG   BufferSizeBytes;            /* 0 = use default (1MBP) */
     ULONG   Flags;                      /* Reserved, must be 0 */
 } MON_RINGBUF_CONFIG_INPUT, *PMON_RINGBUF_CONFIG_INPUT;
 
@@ -335,6 +476,219 @@ typedef struct _MON_RING_EVENT {
     ULONG              Reserved;        /* Alignment padding */
     /* Payload follows immediately */
 } MON_RING_EVENT, *PMON_RING_EVENT;
+
+/*--------------------------------------------------------------------------*/
+/* Interception Schemas (v1.2+ Phase 6)                                     */
+/*--------------------------------------------------------------------------*/
+
+/* Interception action result */
+typedef enum _MON_INTERCEPT_ACTION_PUBLIC {
+    MonIntercept_Allow_Public = 0,      /* Operation permitted */
+    MonIntercept_Block_Public = 1,      /* Operation blocked */
+    MonIntercept_LogOnly_Public = 2     /* Audit mode: log but permit */
+} MON_INTERCEPT_ACTION_PUBLIC;
+
+/* Interception violation reasons */
+typedef enum _MON_INTERCEPT_REASON_PUBLIC {
+    MonReason_None_Public = 0,
+    MonReason_RegBuffersCorrupted_Public = 1,
+    MonReason_KernelAddressInBuffer_Public = 2,
+    MonReason_ExcessiveOperations_Public = 3,
+    MonReason_SuspiciousOpCode_Public = 4,
+    MonReason_ProcessBlacklisted_Public = 5,
+    MonReason_RateLimitExceeded_Public = 6,
+    MonReason_InvalidHandle_Public = 7,
+    MonReason_PolicyDisabled_Public = 8,
+    MonReason_ValidationError_Public = 9,
+    MonReason_BufferSizeTooLarge_Public = 10,
+    MonReason_MalformedRequest_Public = 11
+} MON_INTERCEPT_REASON_PUBLIC;
+
+/* Blacklist add input structure */
+typedef struct _MON_INTERCEPT_BLACKLIST_ADD_INPUT {
+    ULONG ProcessId;
+    CHAR  Reason[64];
+} MON_INTERCEPT_BLACKLIST_ADD_INPUT, *PMON_INTERCEPT_BLACKLIST_ADD_INPUT;
+
+/*--------------------------------------------------------------------------*/
+/* Profile Schemas (v1.2+ Phase 7)                                          */
+/*--------------------------------------------------------------------------*/
+
+/* Profile flags */
+#define MON_PROFILE_FLAG_ELEVATED_PUB        0x0001
+#define MON_PROFILE_FLAG_SERVICE_PUB         0x0002
+#define MON_PROFILE_FLAG_NON_INTERACTIVE_PUB 0x0004
+#define MON_PROFILE_FLAG_SYSTEM_PUB          0x0008
+#define MON_PROFILE_FLAG_BLACKLISTED_PUB     0x0010
+#define MON_PROFILE_FLAG_WHITELISTED_PUB     0x0020
+#define MON_PROFILE_FLAG_EXPORTED_PUB        0x0040
+
+/* Anomaly rule IDs */
+typedef enum _MON_ANOMALY_RULE_ID_PUBLIC {
+    MonAnomalyRule_None_Pub = 0,
+    MonAnomalyRule_HighOpsFrequency_Pub = 1,
+    MonAnomalyRule_LargeBufferRegistration_Pub = 2,
+    MonAnomalyRule_RapidHandleCreation_Pub = 3,
+    MonAnomalyRule_ElevatedIoRingAbuse_Pub = 4,
+    MonAnomalyRule_BurstPattern_Pub = 5,
+    MonAnomalyRule_ConcurrentTargets_Pub = 6,
+    MonAnomalyRule_ViolationAccumulation_Pub = 7,
+    MonAnomalyRule_Max_Pub = 8
+} MON_ANOMALY_RULE_ID_PUBLIC;
+
+/* Anomaly severity levels */
+typedef enum _MON_ANOMALY_SEVERITY_PUBLIC {
+    MonSeverity_Info_Pub = 0,
+    MonSeverity_Low_Pub = 1,
+    MonSeverity_Medium_Pub = 2,
+    MonSeverity_High_Pub = 3,
+    MonSeverity_Critical_Pub = 4
+} MON_ANOMALY_SEVERITY_PUBLIC;
+
+/* Profile summary (IOCTL_MONITOR_PROFILE_GET/LIST output) */
+typedef struct _MON_PROFILE_SUMMARY_PUBLIC {
+    ULONG       Size;                       /* sizeof(MON_PROFILE_SUMMARY_PUBLIC) */
+    ULONG       ProcessId;
+    WCHAR       ProcessName[64];
+
+    /* Key metrics */
+    ULONG       ActiveHandles;
+    ULONG64     TotalOperations;
+    ULONG       OpsPerSecond;
+    ULONG64     TotalMemoryBytes;
+
+    /* Anomaly info */
+    ULONG       AnomalyScore;               /* 0-100 */
+    ULONG       AnomalyEventCount;
+    ULONG       ViolationCount;
+    ULONG       TriggeredRules;             /* Bitmask */
+
+    /* Timestamps */
+    ULONG64     FirstSeenTime;
+    ULONG64     LastActivityTime;
+    ULONG       ActiveDurationSec;
+
+    /* Flags */
+    ULONG       Flags;
+
+} MON_PROFILE_SUMMARY_PUBLIC, *PMON_PROFILE_SUMMARY_PUBLIC;
+
+/* ML Feature vector (IOCTL_MONITOR_PROFILE_EXPORT_ML output) */
+typedef struct _MON_ML_FEATURE_VECTOR_PUBLIC {
+    ULONG       Size;                       /* sizeof(MON_ML_FEATURE_VECTOR_PUBLIC) */
+    ULONG       Version;
+    ULONG       ProcessId;
+    ULONG       Reserved1;
+    ULONG64     Timestamp;
+
+    /* Normalized features */
+    float       OpsPerSecond;
+    float       SubmitsPerMinute;
+    float       HandleCount;
+    float       AvgBufferSizeKB;
+    float       MaxBufferSizeMB;
+    float       TotalMemoryMB;
+    float       ReadWriteRatio;
+    float       RegisteredFiles;
+    float       ActiveDurationMin;
+    float       BurstFrequency;
+    float       ViolationRate;
+    float       ProcessAgeMin;
+
+    /* Categorical features */
+    ULONG       ProcessElevation;
+    ULONG       ProcessInteractive;
+    ULONG       ProcessIsService;
+    ULONG       AnomalyScore;
+
+    /* Label */
+    ULONG       Label;
+    ULONG       Reserved2;
+
+} MON_ML_FEATURE_VECTOR_PUBLIC, *PMON_ML_FEATURE_VECTOR_PUBLIC;
+
+/* Profile statistics (IOCTL_MONITOR_PROFILE_GET_STATS output) */
+typedef struct _MON_PROFILE_STATS_PUBLIC {
+    ULONG       Size;
+    ULONG       Reserved;
+    ULONG       ActiveProfiles;
+    ULONG       TotalProfilesCreated;
+    ULONG       TotalProfilesDestroyed;
+    ULONG       TotalAnomaliesDetected;
+    ULONG64     TotalUpdates;
+    ULONG64     TotalExports;
+} MON_PROFILE_STATS_PUBLIC, *PMON_PROFILE_STATS_PUBLIC;
+
+/* Profile configuration (IOCTL_MONITOR_PROFILE_GET/SET_CONFIG) */
+typedef struct _MON_PROFILE_CONFIG_PUBLIC {
+    ULONG       Size;
+    ULONG       Enabled;                    /* BOOLEAN as ULONG for alignment */
+    ULONG       AutoExport;
+    ULONG       AutoBlacklist;
+    ULONG       AnomalyThreshold;           /* Score threshold for events (0-100) */
+    ULONG       BlacklistThreshold;         /* Score for auto-blacklist (0-100) */
+    ULONG       HistoryWindowSec;
+    ULONG       Reserved;
+} MON_PROFILE_CONFIG_PUBLIC, *PMON_PROFILE_CONFIG_PUBLIC;
+
+/* Anomaly rule definition (IOCTL_MONITOR_ANOMALY_GET_RULES output) */
+typedef struct _MON_ANOMALY_RULE_PUBLIC {
+    MON_ANOMALY_RULE_ID_PUBLIC RuleId;
+    WCHAR       RuleName[32];
+    ULONG       Threshold;
+    ULONG       WindowSeconds;
+    MON_ANOMALY_SEVERITY_PUBLIC Severity;
+    ULONG       ScoreImpact;
+    ULONG       Enabled;                    /* BOOLEAN as ULONG */
+    CHAR        MitreTechnique[16];
+} MON_ANOMALY_RULE_PUBLIC, *PMON_ANOMALY_RULE_PUBLIC;
+
+/* Anomaly threshold input (IOCTL_MONITOR_ANOMALY_SET_THRESHOLD) */
+typedef struct _MON_ANOMALY_THRESHOLD_INPUT {
+    ULONG       RuleId;
+    ULONG       Threshold;
+} MON_ANOMALY_THRESHOLD_INPUT, *PMON_ANOMALY_THRESHOLD_INPUT;
+
+/* Anomaly enable input (IOCTL_MONITOR_ANOMALY_ENABLE_RULE) */
+typedef struct _MON_ANOMALY_ENABLE_INPUT {
+    ULONG       RuleId;
+    ULONG       Enable;                     /* BOOLEAN as ULONG */
+} MON_ANOMALY_ENABLE_INPUT, *PMON_ANOMALY_ENABLE_INPUT;
+
+/* Anomaly statistics (IOCTL_MONITOR_ANOMALY_GET_STATS output) */
+typedef struct _MON_ANOMALY_STATS_PUBLIC {
+    ULONG       Size;
+    ULONG       TotalRules;
+    ULONG       EnabledRules;
+    ULONG       TotalEvaluations;
+    ULONG       TotalMatches;
+    ULONG       Reserved;
+} MON_ANOMALY_STATS_PUBLIC, *PMON_ANOMALY_STATS_PUBLIC;
+
+/* Process anomaly event (ring buffer event payload) */
+typedef struct _MON_ANOMALY_EVENT_PUBLIC {
+    ULONG       Size;
+    ULONG       ProcessId;
+    ULONG       RuleId;
+    ULONG       Reserved;
+    WCHAR       RuleName[32];
+    ULONG       AnomalyScore;
+    ULONG       ThresholdExceeded;
+    ULONG       ActualValue;
+    ULONG       Severity;
+    ULONG64     Timestamp;
+    CHAR        MitreTechnique[16];
+} MON_ANOMALY_EVENT_PUBLIC, *PMON_ANOMALY_EVENT_PUBLIC;
+
+/* Add MonEvent types for Phase 7 */
+#ifndef MON_EVENT_PHASE7_DEFINED
+#define MON_EVENT_PHASE7_DEFINED
+/* These extend MONITOR_EVENT_TYPE enum */
+#define MonEvent_ProcessAnomalyDetected  11
+#define MonEvent_ProfileCreated          12
+#define MonEvent_ProfileDestroyed        13
+#define MonEvent_BurstDetected           14
+#endif
 
 #ifdef __cplusplus
 } /* extern "C" */

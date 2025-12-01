@@ -42,6 +42,9 @@
 #include "monitor_internal.h"
 #include "iop_mc.h"           /* Structure parser: IopIsValidMcBufferEntry, IopQueryMcBufferEntry */
 #include "telemetry_ringbuf.h" /* Ring buffer telemetry (E1) */
+#include "ioring_intercept.h" /* IoRing interception (Phase 6) */
+#include "process_profile.h"  /* Process behavior profiling (Phase 7) */
+#include "anomaly_rules.h"    /* Anomaly detection rules (Phase 7) */
 
 #pragma warning(push)
 #pragma warning(disable: 4201) /* nameless struct/union in SAL headers */
@@ -84,6 +87,33 @@ static NTSTATUS MonIoctlRingBufConfigure(_In_reads_bytes_(sizeof(MON_RINGBUF_CON
 static NTSTATUS MonIoctlRingBufSnapshot(_Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
 static NTSTATUS MonIoctlRingBufGetStats(_Out_writes_bytes_(sizeof(MON_RINGBUF_STATS_OUTPUT)) PVOID Out, _In_ ULONG OutLen);
 static NTSTATUS MonIoctlRingBufClear(VOID);
+
+/* Interception IOCTLs (Phase 6) */
+static NTSTATUS MonIoctlInterceptValidate(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlInterceptSetPolicy(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen);
+static NTSTATUS MonIoctlInterceptGetPolicy(_Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlInterceptGetStats(_Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlInterceptResetStats(VOID);
+static NTSTATUS MonIoctlInterceptEnable(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen);
+static NTSTATUS MonIoctlInterceptAddBlacklist(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen);
+static NTSTATUS MonIoctlInterceptRemoveBlacklist(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen);
+static NTSTATUS MonIoctlInterceptGetBlacklist(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+
+/* Profile IOCTLs (Phase 7) */
+static NTSTATUS MonIoctlProfileGet(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlProfileList(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+static NTSTATUS MonIoctlProfileExportML(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlProfileGetStats(_Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlProfileGetConfig(_Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlProfileSetConfig(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen);
+static NTSTATUS MonIoctlProfileReset(VOID);
+
+/* Anomaly IOCTLs (Phase 7) */
+static NTSTATUS MonIoctlAnomalyGetRules(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+static NTSTATUS MonIoctlAnomalySetThreshold(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen);
+static NTSTATUS MonIoctlAnomalyEnableRule(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen);
+static NTSTATUS MonIoctlAnomalyGetStats(_Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlAnomalyResetStats(VOID);
 
 /* Timer DPC -> schedules pool scan work */
 _Function_class_(KDEFERRED_ROUTINE)
@@ -186,6 +216,30 @@ DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
             "[WIN11MON] Ring buffer init failed: 0x%08X\n", status);
     }
 
+    /* Initialize IoRing interception subsystem (Phase 6) */
+    status = MonInterceptInitialize();
+    if (!NT_SUCCESS(status)) {
+        /* Non-fatal: continue without interception */
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+            "[WIN11MON] Intercept init failed: 0x%08X\n", status);
+    }
+
+    /* Initialize process behavior profiling (Phase 7) */
+    status = MonProfileInitialize();
+    if (!NT_SUCCESS(status)) {
+        /* Non-fatal: continue without profiling */
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+            "[WIN11MON] Profile init failed: 0x%08X\n", status);
+    }
+
+    /* Initialize anomaly detection rules (Phase 7) */
+    status = MonAnomalyInitialize();
+    if (!NT_SUCCESS(status)) {
+        /* Non-fatal: continue without anomaly detection */
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+            "[WIN11MON] Anomaly rules init failed: 0x%08X\n", status);
+    }
+
     /* Timer/DPC for periodic scanning */
     KeInitializeTimer(&g_Mon.ScanTimer);
     KeInitializeDpc(&g_Mon.ScanDpc, MonScanDpc, &g_Mon);
@@ -216,6 +270,9 @@ MonDriverUnload(PDRIVER_OBJECT DriverObject)
     MonTelemetryShutdown(&g_Mon);
 
     /* Shutdown enhancement subsystems (reverse order of init) */
+    MonAnomalyShutdown();     /* Phase 7: Anomaly rules */
+    MonProfileShutdown();     /* Phase 7: Process profiling */
+    MonInterceptShutdown();   /* Phase 6: IoRing interception */
     MonRingBufferShutdown();  /* E1: Ring buffer */
     MonRateLimitShutdown();
     MonAddrMaskShutdown();
@@ -371,6 +428,101 @@ MonIrpDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp)
         status = MonIoctlRingBufClear();
         break;
 
+    /* Interception IOCTLs (Phase 6) */
+    case IOCTL_MONITOR_INTERCEPT_VALIDATE:
+        status = MonIoctlInterceptValidate(inBuf, inLen, outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_INTERCEPT_RESPONSE) : 0;
+        break;
+
+    case IOCTL_MONITOR_INTERCEPT_SET_POLICY:
+        status = MonIoctlInterceptSetPolicy(inBuf, inLen);
+        break;
+
+    case IOCTL_MONITOR_INTERCEPT_GET_POLICY:
+        status = MonIoctlInterceptGetPolicy(outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_INTERCEPT_POLICY) : 0;
+        break;
+
+    case IOCTL_MONITOR_INTERCEPT_GET_STATS:
+        status = MonIoctlInterceptGetStats(outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_INTERCEPT_STATS) : 0;
+        break;
+
+    case IOCTL_MONITOR_INTERCEPT_RESET_STATS:
+        status = MonIoctlInterceptResetStats();
+        break;
+
+    case IOCTL_MONITOR_INTERCEPT_ENABLE:
+        status = MonIoctlInterceptEnable(inBuf, inLen);
+        break;
+
+    case IOCTL_MONITOR_INTERCEPT_ADD_BL:
+        status = MonIoctlInterceptAddBlacklist(inBuf, inLen);
+        break;
+
+    case IOCTL_MONITOR_INTERCEPT_REMOVE_BL:
+        status = MonIoctlInterceptRemoveBlacklist(inBuf, inLen);
+        break;
+
+    case IOCTL_MONITOR_INTERCEPT_GET_BL:
+        status = MonIoctlInterceptGetBlacklist(inBuf, inLen, outBuf, outLen, &bytesOut);
+        break;
+
+    /* Profile IOCTLs (Phase 7) */
+    case IOCTL_MONITOR_PROFILE_GET:
+        status = MonIoctlProfileGet(inBuf, inLen, outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_PROFILE_SUMMARY_PUBLIC) : 0;
+        break;
+
+    case IOCTL_MONITOR_PROFILE_LIST:
+        status = MonIoctlProfileList(inBuf, inLen, outBuf, outLen, &bytesOut);
+        break;
+
+    case IOCTL_MONITOR_PROFILE_EXPORT_ML:
+        status = MonIoctlProfileExportML(inBuf, inLen, outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_ML_FEATURE_VECTOR_PUBLIC) : 0;
+        break;
+
+    case IOCTL_MONITOR_PROFILE_GET_STATS:
+        status = MonIoctlProfileGetStats(outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_PROFILE_STATS_PUBLIC) : 0;
+        break;
+
+    case IOCTL_MONITOR_PROFILE_GET_CONFIG:
+        status = MonIoctlProfileGetConfig(outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_PROFILE_CONFIG_PUBLIC) : 0;
+        break;
+
+    case IOCTL_MONITOR_PROFILE_SET_CONFIG:
+        status = MonIoctlProfileSetConfig(inBuf, inLen);
+        break;
+
+    case IOCTL_MONITOR_PROFILE_RESET:
+        status = MonIoctlProfileReset();
+        break;
+
+    /* Anomaly IOCTLs (Phase 7) */
+    case IOCTL_MONITOR_ANOMALY_GET_RULES:
+        status = MonIoctlAnomalyGetRules(inBuf, inLen, outBuf, outLen, &bytesOut);
+        break;
+
+    case IOCTL_MONITOR_ANOMALY_SET_THRESHOLD:
+        status = MonIoctlAnomalySetThreshold(inBuf, inLen);
+        break;
+
+    case IOCTL_MONITOR_ANOMALY_ENABLE_RULE:
+        status = MonIoctlAnomalyEnableRule(inBuf, inLen);
+        break;
+
+    case IOCTL_MONITOR_ANOMALY_GET_STATS:
+        status = MonIoctlAnomalyGetStats(outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_ANOMALY_STATS_PUBLIC) : 0;
+        break;
+
+    case IOCTL_MONITOR_ANOMALY_RESET_STATS:
+        status = MonIoctlAnomalyResetStats();
+        break;
+
     default:
         status = STATUS_INVALID_DEVICE_REQUEST;
         break;
@@ -443,6 +595,19 @@ static NTSTATUS MonIoctlGetCaps(PVOID Out, ULONG OutLen)
     /* E1: Ring buffer telemetry */
     if (MonRingBufferIsInitialized()) {
         caps |= WIN11MON_CAP_RING_BUFFER;
+    }
+
+    /* Phase 6: IoRing interception */
+    if (MonInterceptIsInitialized()) {
+        caps |= WIN11MON_CAP_IORING_INTERCEPT;
+    }
+
+    /* Phase 7: Process profiling and anomaly detection */
+    if (MonProfileIsInitialized()) {
+        caps |= WIN11MON_CAP_PROCESS_PROFILE;
+    }
+    if (MonAnomalyIsInitialized()) {
+        caps |= WIN11MON_CAP_ANOMALY_RULES;
     }
 
     RtlCopyMemory(Out, &caps, sizeof(caps));
@@ -829,6 +994,212 @@ static NTSTATUS MonIoctlRingBufClear(VOID)
 }
 
 /*---------------------------------------------------------------------------
+ * Interception IOCTL Implementations (Phase 6)
+ *-------------------------------------------------------------------------*/
+
+/**
+ * @function   MonIoctlInterceptValidate
+ * @purpose    Validate IoRing submission via policy engine
+ */
+static NTSTATUS MonIoctlInterceptValidate(PVOID In, ULONG InLen, PVOID Out, ULONG OutLen)
+{
+    if (In == NULL || Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (OutLen < sizeof(MON_INTERCEPT_RESPONSE)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    if (!MonInterceptIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    MON_INTERCEPT_RESPONSE response = {0};
+    NTSTATUS status = MonInterceptValidateSubmission(
+        (PMON_INTERCEPT_REQUEST)In,
+        InLen,
+        &response
+    );
+
+    RtlCopyMemory(Out, &response, sizeof(response));
+    return status;
+}
+
+/**
+ * @function   MonIoctlInterceptSetPolicy
+ * @purpose    Configure interception policy
+ */
+static NTSTATUS MonIoctlInterceptSetPolicy(PVOID In, ULONG InLen)
+{
+    if (In == NULL || InLen < sizeof(MON_INTERCEPT_POLICY)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonInterceptIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    return MonInterceptSetPolicy((PMON_INTERCEPT_POLICY)In);
+}
+
+/**
+ * @function   MonIoctlInterceptGetPolicy
+ * @purpose    Get current interception policy
+ */
+static NTSTATUS MonIoctlInterceptGetPolicy(PVOID Out, ULONG OutLen)
+{
+    if (Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (OutLen < sizeof(MON_INTERCEPT_POLICY)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    MonInterceptGetPolicy((PMON_INTERCEPT_POLICY)Out);
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlInterceptGetStats
+ * @purpose    Get interception statistics
+ */
+static NTSTATUS MonIoctlInterceptGetStats(PVOID Out, ULONG OutLen)
+{
+    if (Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (OutLen < sizeof(MON_INTERCEPT_STATS)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    MonInterceptGetStats((PMON_INTERCEPT_STATS)Out);
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlInterceptResetStats
+ * @purpose    Reset interception statistics
+ */
+static NTSTATUS MonIoctlInterceptResetStats(VOID)
+{
+    if (!MonInterceptIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    MonInterceptResetStats();
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlInterceptEnable
+ * @purpose    Enable or disable interception
+ */
+static NTSTATUS MonIoctlInterceptEnable(PVOID In, ULONG InLen)
+{
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonInterceptIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    ULONG enable = *(PULONG)In;
+    MonInterceptEnable(enable != 0);
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlInterceptAddBlacklist
+ * @purpose    Add process to blacklist
+ */
+static NTSTATUS MonIoctlInterceptAddBlacklist(PVOID In, ULONG InLen)
+{
+    if (In == NULL || InLen < sizeof(MON_INTERCEPT_BLACKLIST_ADD_INPUT)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonInterceptIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    const MON_INTERCEPT_BLACKLIST_ADD_INPUT* input = (const MON_INTERCEPT_BLACKLIST_ADD_INPUT*)In;
+
+    return MonInterceptAddToBlacklist(
+        input->ProcessId,
+        NULL,  /* ProcessName - not provided in input */
+        input->Reason
+    );
+}
+
+/**
+ * @function   MonIoctlInterceptRemoveBlacklist
+ * @purpose    Remove process from blacklist
+ */
+static NTSTATUS MonIoctlInterceptRemoveBlacklist(PVOID In, ULONG InLen)
+{
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonInterceptIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    ULONG processId = *(PULONG)In;
+    return MonInterceptRemoveFromBlacklist(processId) ? STATUS_SUCCESS : STATUS_NOT_FOUND;
+}
+
+/**
+ * @function   MonIoctlInterceptGetBlacklist
+ * @purpose    Enumerate blacklisted processes
+ */
+static NTSTATUS MonIoctlInterceptGetBlacklist(PVOID In, ULONG InLen, PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    NTSTATUS status;
+    ULONG maxEntries;
+    ULONG entryCount = 0;
+
+    *BytesOut = 0;
+
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonInterceptIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    /* Calculate max entries that fit in output buffer */
+    maxEntries = OutLen / sizeof(MON_BLACKLIST_ENTRY);
+    if (maxEntries == 0) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    /* Cap to requested max from input */
+    ULONG requestedMax = *(PULONG)In;
+    if (requestedMax > 0 && requestedMax < maxEntries) {
+        maxEntries = requestedMax;
+    }
+
+    /* Enumerate blacklist via kernel API */
+    status = MonInterceptEnumerateBlacklist(
+        (PMON_BLACKLIST_ENTRY)Out,
+        maxEntries,
+        &entryCount
+    );
+
+    if (NT_SUCCESS(status)) {
+        *BytesOut = entryCount * sizeof(MON_BLACKLIST_ENTRY);
+    }
+
+    return status;
+}
+
+/*---------------------------------------------------------------------------
  * IoRing Handle Enumeration Context (for callback)
  *-------------------------------------------------------------------------*/
 typedef struct _IORING_ENUM_CONTEXT {
@@ -945,6 +1316,337 @@ static NTSTATUS MonIoctlGetIoRingHandles(PVOID Out, ULONG OutLen, ULONG* BytesOu
     ExFreePoolWithTag(handleArray, MON_POOL_TAG);
 
     *BytesOut = totalSize;
+    return STATUS_SUCCESS;
+}
+
+/*---------------------------------------------------------------------------
+ * Profile IOCTL Implementations (Phase 7)
+ *-------------------------------------------------------------------------*/
+
+static NTSTATUS MonIoctlProfileGet(PVOID In, ULONG InLen, PVOID Out, ULONG OutLen)
+{
+    ULONG processId;
+    MON_PROFILE_SUMMARY summary;
+    NTSTATUS status;
+
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (Out == NULL || OutLen < sizeof(MON_PROFILE_SUMMARY_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    if (!MonProfileIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    processId = *(PULONG)In;
+    status = MonProfileGetSummary(processId, &summary);
+
+    if (NT_SUCCESS(status)) {
+        /* Map internal to public structure */
+        MON_PROFILE_SUMMARY_PUBLIC* pubOut = (MON_PROFILE_SUMMARY_PUBLIC*)Out;
+        pubOut->Size = sizeof(MON_PROFILE_SUMMARY_PUBLIC);
+        pubOut->ProcessId = summary.ProcessId;
+        RtlCopyMemory(pubOut->ProcessName, summary.ProcessName, sizeof(pubOut->ProcessName));
+        pubOut->ActiveHandles = summary.ActiveHandles;
+        pubOut->TotalOperations = summary.TotalOperations;
+        pubOut->OpsPerSecond = summary.OpsPerSecond;
+        pubOut->TotalMemoryBytes = summary.TotalMemoryBytes;
+        pubOut->AnomalyScore = summary.AnomalyScore;
+        pubOut->AnomalyEventCount = summary.AnomalyEventCount;
+        pubOut->ViolationCount = summary.ViolationCount;
+        pubOut->TriggeredRules = summary.TriggeredRules;
+        pubOut->FirstSeenTime = summary.FirstSeenTime;
+        pubOut->LastActivityTime = summary.LastActivityTime;
+        pubOut->ActiveDurationSec = summary.ActiveDurationSec;
+        pubOut->Flags = summary.Flags;
+    }
+
+    return status;
+}
+
+static NTSTATUS MonIoctlProfileList(PVOID In, ULONG InLen, PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    ULONG maxCount, actualCount = 0;
+    NTSTATUS status;
+    PMON_PROFILE_SUMMARY internalBuf = NULL;
+
+    *BytesOut = 0;
+
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonProfileIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    maxCount = OutLen / sizeof(MON_PROFILE_SUMMARY_PUBLIC);
+    if (maxCount == 0) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    /* Cap to requested max from input */
+    ULONG requestedMax = *(PULONG)In;
+    if (requestedMax > 0 && requestedMax < maxCount) {
+        maxCount = requestedMax;
+    }
+
+    /* Allocate temp buffer for internal structures */
+    internalBuf = (PMON_PROFILE_SUMMARY)ExAllocatePoolWithTag(
+        PagedPool, maxCount * sizeof(MON_PROFILE_SUMMARY), MON_PROFILE_TAG);
+    if (internalBuf == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    status = MonProfileEnumerate(internalBuf, maxCount, &actualCount);
+
+    if (NT_SUCCESS(status) && actualCount > 0) {
+        MON_PROFILE_SUMMARY_PUBLIC* pubOut = (MON_PROFILE_SUMMARY_PUBLIC*)Out;
+        for (ULONG i = 0; i < actualCount; i++) {
+            pubOut[i].Size = sizeof(MON_PROFILE_SUMMARY_PUBLIC);
+            pubOut[i].ProcessId = internalBuf[i].ProcessId;
+            RtlCopyMemory(pubOut[i].ProcessName, internalBuf[i].ProcessName,
+                          sizeof(pubOut[i].ProcessName));
+            pubOut[i].ActiveHandles = internalBuf[i].ActiveHandles;
+            pubOut[i].TotalOperations = internalBuf[i].TotalOperations;
+            pubOut[i].OpsPerSecond = internalBuf[i].OpsPerSecond;
+            pubOut[i].TotalMemoryBytes = internalBuf[i].TotalMemoryBytes;
+            pubOut[i].AnomalyScore = internalBuf[i].AnomalyScore;
+            pubOut[i].AnomalyEventCount = internalBuf[i].AnomalyEventCount;
+            pubOut[i].ViolationCount = internalBuf[i].ViolationCount;
+            pubOut[i].TriggeredRules = internalBuf[i].TriggeredRules;
+            pubOut[i].FirstSeenTime = internalBuf[i].FirstSeenTime;
+            pubOut[i].LastActivityTime = internalBuf[i].LastActivityTime;
+            pubOut[i].ActiveDurationSec = internalBuf[i].ActiveDurationSec;
+            pubOut[i].Flags = internalBuf[i].Flags;
+        }
+        *BytesOut = actualCount * sizeof(MON_PROFILE_SUMMARY_PUBLIC);
+    }
+
+    ExFreePoolWithTag(internalBuf, MON_PROFILE_TAG);
+    return status;
+}
+
+static NTSTATUS MonIoctlProfileExportML(PVOID In, ULONG InLen, PVOID Out, ULONG OutLen)
+{
+    ULONG processId;
+    MON_ML_FEATURE_VECTOR features;
+    NTSTATUS status;
+
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (Out == NULL || OutLen < sizeof(MON_ML_FEATURE_VECTOR_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    if (!MonProfileIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    processId = *(PULONG)In;
+    status = MonProfileExportFeatures(processId, &features);
+
+    if (NT_SUCCESS(status)) {
+        /* Copy to public structure (same layout) */
+        RtlCopyMemory(Out, &features, sizeof(MON_ML_FEATURE_VECTOR_PUBLIC));
+    }
+
+    return status;
+}
+
+static NTSTATUS MonIoctlProfileGetStats(PVOID Out, ULONG OutLen)
+{
+    MON_PROFILE_STATS stats;
+
+    if (Out == NULL || OutLen < sizeof(MON_PROFILE_STATS_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    MonProfileGetStats(&stats);
+
+    /* Copy to public structure */
+    MON_PROFILE_STATS_PUBLIC* pubOut = (MON_PROFILE_STATS_PUBLIC*)Out;
+    pubOut->Size = sizeof(MON_PROFILE_STATS_PUBLIC);
+    pubOut->Reserved = 0;
+    pubOut->ActiveProfiles = stats.ActiveProfiles;
+    pubOut->TotalProfilesCreated = stats.TotalProfilesCreated;
+    pubOut->TotalProfilesDestroyed = stats.TotalProfilesDestroyed;
+    pubOut->TotalAnomaliesDetected = stats.TotalAnomaliesDetected;
+    pubOut->TotalUpdates = stats.TotalUpdates;
+    pubOut->TotalExports = stats.TotalExports;
+
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS MonIoctlProfileGetConfig(PVOID Out, ULONG OutLen)
+{
+    MON_PROFILE_CONFIG config;
+
+    if (Out == NULL || OutLen < sizeof(MON_PROFILE_CONFIG_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    MonProfileGetConfig(&config);
+
+    /* Copy to public structure */
+    MON_PROFILE_CONFIG_PUBLIC* pubOut = (MON_PROFILE_CONFIG_PUBLIC*)Out;
+    pubOut->Size = sizeof(MON_PROFILE_CONFIG_PUBLIC);
+    pubOut->Enabled = config.Enabled ? 1 : 0;
+    pubOut->AutoExport = config.AutoExport ? 1 : 0;
+    pubOut->AutoBlacklist = config.AutoBlacklist ? 1 : 0;
+    pubOut->AnomalyThreshold = config.AnomalyThreshold;
+    pubOut->BlacklistThreshold = config.BlacklistThreshold;
+    pubOut->HistoryWindowSec = config.HistoryWindowSec;
+    pubOut->Reserved = 0;
+
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS MonIoctlProfileSetConfig(PVOID In, ULONG InLen)
+{
+    MON_PROFILE_CONFIG config;
+
+    if (In == NULL || InLen < sizeof(MON_PROFILE_CONFIG_PUBLIC)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonProfileIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    const MON_PROFILE_CONFIG_PUBLIC* pubIn = (const MON_PROFILE_CONFIG_PUBLIC*)In;
+    if (pubIn->Size != sizeof(MON_PROFILE_CONFIG_PUBLIC)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    /* Map public to internal */
+    config.Size = sizeof(MON_PROFILE_CONFIG);
+    config.Enabled = (BOOLEAN)pubIn->Enabled;
+    config.AutoExport = (BOOLEAN)pubIn->AutoExport;
+    config.AutoBlacklist = (BOOLEAN)pubIn->AutoBlacklist;
+    config.AnomalyThreshold = pubIn->AnomalyThreshold;
+    config.BlacklistThreshold = pubIn->BlacklistThreshold;
+    config.HistoryWindowSec = pubIn->HistoryWindowSec;
+
+    return MonProfileSetConfig(&config);
+}
+
+static NTSTATUS MonIoctlProfileReset(VOID)
+{
+    if (!MonProfileIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    MonProfileResetAll();
+    return STATUS_SUCCESS;
+}
+
+/*---------------------------------------------------------------------------
+ * Anomaly IOCTL Implementations (Phase 7)
+ *-------------------------------------------------------------------------*/
+
+static NTSTATUS MonIoctlAnomalyGetRules(PVOID In, ULONG InLen, PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    ULONG maxCount, actualCount = 0;
+    NTSTATUS status;
+
+    *BytesOut = 0;
+
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonAnomalyIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    maxCount = OutLen / sizeof(MON_ANOMALY_RULE_PUBLIC);
+    if (maxCount == 0) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    /* Cap to requested max from input */
+    ULONG requestedMax = *(PULONG)In;
+    if (requestedMax > 0 && requestedMax < maxCount) {
+        maxCount = requestedMax;
+    }
+
+    /* Enumerate rules (kernel structure is compatible) */
+    status = MonAnomalyEnumerateRules((PMON_ANOMALY_RULE)Out, maxCount, &actualCount);
+
+    if (NT_SUCCESS(status)) {
+        *BytesOut = actualCount * sizeof(MON_ANOMALY_RULE_PUBLIC);
+    }
+
+    return status;
+}
+
+static NTSTATUS MonIoctlAnomalySetThreshold(PVOID In, ULONG InLen)
+{
+    if (In == NULL || InLen < sizeof(MON_ANOMALY_THRESHOLD_INPUT)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonAnomalyIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    const MON_ANOMALY_THRESHOLD_INPUT* input = (const MON_ANOMALY_THRESHOLD_INPUT*)In;
+    return MonAnomalySetThreshold((MON_ANOMALY_RULE_ID)input->RuleId, input->Threshold);
+}
+
+static NTSTATUS MonIoctlAnomalyEnableRule(PVOID In, ULONG InLen)
+{
+    if (In == NULL || InLen < sizeof(MON_ANOMALY_ENABLE_INPUT)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!MonAnomalyIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    const MON_ANOMALY_ENABLE_INPUT* input = (const MON_ANOMALY_ENABLE_INPUT*)In;
+    return MonAnomalyEnableRule((MON_ANOMALY_RULE_ID)input->RuleId, input->Enable != 0);
+}
+
+static NTSTATUS MonIoctlAnomalyGetStats(PVOID Out, ULONG OutLen)
+{
+    MON_ANOMALY_STATS stats;
+
+    if (Out == NULL || OutLen < sizeof(MON_ANOMALY_STATS_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    MonAnomalyGetStats(&stats);
+
+    /* Copy to public structure */
+    MON_ANOMALY_STATS_PUBLIC* pubOut = (MON_ANOMALY_STATS_PUBLIC*)Out;
+    pubOut->Size = sizeof(MON_ANOMALY_STATS_PUBLIC);
+    pubOut->TotalRules = stats.TotalRules;
+    pubOut->EnabledRules = stats.EnabledRules;
+    pubOut->TotalEvaluations = stats.TotalEvaluations;
+    pubOut->TotalMatches = stats.TotalMatches;
+    pubOut->Reserved = 0;
+
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS MonIoctlAnomalyResetStats(VOID)
+{
+    if (!MonAnomalyIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    MonAnomalyResetStats();
     return STATUS_SUCCESS;
 }
 
