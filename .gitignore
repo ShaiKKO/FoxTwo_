@@ -30,6 +30,9 @@
 *.VC.db
 *.VC.VC.opendb
 
+# Claude documentation file
+CLAUDE.MD
+
 # Other temporary files
 *.tmp
 *.cache

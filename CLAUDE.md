@@ -246,16 +246,22 @@ d:\Xploit\
 ├── mem_monitor.c/h               # MDL tracking, memory anomaly detection
 ├── vad_walker.c                  # VAD tree traversal, runtime offset resolution
 │
+├── # Phase 9: Cross-Process Detection
+├── cross_process.c/h             # Subsystem lifecycle, risk scoring, alerts
+├── handle_correlator.c           # Handle enumeration, hash table grouping
+│
 ├── test_harness.c                # In-kernel test framework
 ├── test_profile.c                # Phase 7 unit tests
 ├── test_intercept.c              # Phase 6 unit tests
 ├── test_memory.c                 # Phase 8 unit tests
+├── test_xprocess.c               # Phase 9 unit tests
 │
 ├── client/                       # User-mode client library
 │   ├── win11mon_client.c/h       # Base client API
 │   ├── win11mon_intercept.c/h    # IAT hooks for NtSubmitIoRing
 │   ├── win11mon_profile.c/h      # Profile/anomaly client APIs
-│   └── win11mon_memory.c/h       # Memory monitoring client APIs
+│   ├── win11mon_memory.c/h       # Memory monitoring client APIs
+│   └── win11mon_xprocess.c/h     # Cross-process detection client APIs
 │
 ├── tools/
 │   └── layout_gen/               # Structure layout generator
@@ -319,6 +325,7 @@ Interception (Ph6):  0x20-0x28
 Profile (Ph7):       0x30-0x36
 Anomaly (Ph7):       0x38-0x3C
 Memory (Ph8):        0x40-0x44
+Cross-Process (Ph9): 0x50-0x57
 ```
 
 ### Core IOCTLs (0x00-0x09)
@@ -342,6 +349,7 @@ Memory (Ph8):        0x40-0x44
 | `0x30-0x36` | Phase 7 | Profile get/list/export/stats/config/reset |
 | `0x38-0x3C` | Phase 7 | Anomaly rules/threshold/enable/stats/reset |
 | `0x40-0x44` | Phase 8 | Memory VAD/MDL/physical/sharing/stats |
+| `0x50-0x57` | Phase 9 | Cross-process shared/tree/sections/alerts/stats/config |
 
 ## Capability Flags
 
@@ -362,6 +370,7 @@ WIN11MON_CAP_IORING_INTERCEPT    0x00004000u   /* Phase 6: IoRing interception *
 WIN11MON_CAP_PROCESS_PROFILE     0x00008000u   /* Phase 7: Process profiling */
 WIN11MON_CAP_ANOMALY_RULES       0x00010000u   /* Phase 7: Anomaly rule engine */
 WIN11MON_CAP_MEM_MONITOR         0x00020000u   /* Phase 8: Memory monitoring */
+WIN11MON_CAP_CROSS_PROCESS       0x00040000u   /* Phase 9: Cross-process detection */
 ```
 
 ## Security Architecture
@@ -444,8 +453,8 @@ verifier /standard /driver win11_monitor_mgr.sys
 
 ## Development Status
 
-**Version:** 1.5 (as of 2025-12-01)
-**Current Phase:** Phase 8 Complete - Ready for Phase 9
+**Version:** 1.6 (as of 2025-11-30)
+**Current Phase:** Phase 9 Complete - Ready for Phase 10
 
 | Phase | Feature | Status |
 |-------|---------|--------|
@@ -460,7 +469,7 @@ verifier /standard /driver win11_monitor_mgr.sys
 | 6 | IoRing interception (pre-submit validation, blacklist, policy) | Complete |
 | 7 | Process profiling (anomaly detection, ML export) | Complete |
 | 8 | Memory monitoring (VAD walking, MDL tracking, anomaly detection) | Complete |
-| 9 | Cross-process detection | Planning |
+| 9 | Cross-process detection (IoRing sharing, handle correlation, risk scoring) | Complete |
 | 10 | Kernel callbacks | Planning |
 | 11 | Forensic export | Planning |
 

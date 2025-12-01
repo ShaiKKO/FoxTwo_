@@ -46,6 +46,7 @@
 #include "process_profile.h"  /* Process behavior profiling (Phase 7) */
 #include "anomaly_rules.h"    /* Anomaly detection rules (Phase 7) */
 #include "mem_monitor.h"      /* Memory region monitoring (Phase 8) */
+#include "cross_process.h"    /* Cross-process detection (Phase 9) */
 
 #pragma warning(push)
 #pragma warning(disable: 4201) /* nameless struct/union in SAL headers */
@@ -122,6 +123,16 @@ static NTSTATUS MonIoctlMemGetMdls(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG 
 static NTSTATUS MonIoctlMemScanPhysical(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
 static NTSTATUS MonIoctlMemGetSharing(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
 static NTSTATUS MonIoctlMemGetStats(_Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+
+/* Cross-Process Detection IOCTLs (Phase 9) */
+static NTSTATUS MonIoctlXpGetShared(_Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+static NTSTATUS MonIoctlXpGetTree(_Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+static NTSTATUS MonIoctlXpScanSections(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+static NTSTATUS MonIoctlXpGetAlerts(_Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+static NTSTATUS MonIoctlXpGetStats(_Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlXpGetConfig(_Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlXpSetConfig(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen);
+static NTSTATUS MonIoctlXpScanNow(VOID);
 
 /* Timer DPC -> schedules pool scan work */
 _Function_class_(KDEFERRED_ROUTINE)
@@ -256,6 +267,14 @@ DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
             "[WIN11MON] Memory monitor init failed: 0x%08X\n", status);
     }
 
+    /* Initialize cross-process detection (Phase 9) */
+    status = MonXpInitialize();
+    if (!NT_SUCCESS(status)) {
+        /* Non-fatal: continue without cross-process detection */
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+            "[WIN11MON] Cross-process init failed: 0x%08X\n", status);
+    }
+
     /* Timer/DPC for periodic scanning */
     KeInitializeTimer(&g_Mon.ScanTimer);
     KeInitializeDpc(&g_Mon.ScanDpc, MonScanDpc, &g_Mon);
@@ -286,6 +305,7 @@ MonDriverUnload(PDRIVER_OBJECT DriverObject)
     MonTelemetryShutdown(&g_Mon);
 
     /* Shutdown enhancement subsystems (reverse order of init) */
+    MonXpShutdown();          /* Phase 9: Cross-process detection */
     MonMemShutdown();         /* Phase 8: Memory monitoring */
     MonAnomalyShutdown();     /* Phase 7: Anomaly rules */
     MonProfileShutdown();     /* Phase 7: Process profiling */
@@ -563,6 +583,41 @@ MonIrpDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp)
         bytesOut = NT_SUCCESS(status) ? sizeof(MON_MEM_STATS_PUBLIC) : 0;
         break;
 
+    /* Cross-Process Detection IOCTLs (Phase 9) */
+    case IOCTL_MONITOR_XP_GET_SHARED:
+        status = MonIoctlXpGetShared(outBuf, outLen, &bytesOut);
+        break;
+
+    case IOCTL_MONITOR_XP_GET_TREE:
+        status = MonIoctlXpGetTree(outBuf, outLen, &bytesOut);
+        break;
+
+    case IOCTL_MONITOR_XP_SCAN_SECTIONS:
+        status = MonIoctlXpScanSections(inBuf, inLen, outBuf, outLen, &bytesOut);
+        break;
+
+    case IOCTL_MONITOR_XP_GET_ALERTS:
+        status = MonIoctlXpGetAlerts(outBuf, outLen, &bytesOut);
+        break;
+
+    case IOCTL_MONITOR_XP_GET_STATS:
+        status = MonIoctlXpGetStats(outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_XP_STATS_PUBLIC) : 0;
+        break;
+
+    case IOCTL_MONITOR_XP_GET_CONFIG:
+        status = MonIoctlXpGetConfig(outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_XP_CONFIG_PUBLIC) : 0;
+        break;
+
+    case IOCTL_MONITOR_XP_SET_CONFIG:
+        status = MonIoctlXpSetConfig(inBuf, inLen);
+        break;
+
+    case IOCTL_MONITOR_XP_SCAN_NOW:
+        status = MonIoctlXpScanNow();
+        break;
+
     default:
         status = STATUS_INVALID_DEVICE_REQUEST;
         break;
@@ -653,6 +708,11 @@ static NTSTATUS MonIoctlGetCaps(PVOID Out, ULONG OutLen)
     /* Phase 8: Memory region monitoring */
     if (MonMemIsInitialized()) {
         caps |= WIN11MON_CAP_MEM_MONITOR;
+    }
+
+    /* Phase 9: Cross-process detection */
+    if (MonXpIsInitialized()) {
+        caps |= WIN11MON_CAP_CROSS_PROCESS;
     }
 
     RtlCopyMemory(Out, &caps, sizeof(caps));
@@ -1914,6 +1974,358 @@ static NTSTATUS MonIoctlMemGetStats(PVOID Out, ULONG OutLen)
     }
 
     return STATUS_SUCCESS;
+}
+
+/*---------------------------------------------------------------------------
+ * Cross-Process Detection IOCTLs (Phase 9)
+ *-------------------------------------------------------------------------*/
+
+/**
+ * @function   MonIoctlXpGetShared
+ * @purpose    Get list of shared IoRing objects between processes
+ */
+static NTSTATUS MonIoctlXpGetShared(PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    MON_XP_SHARED_OBJECT* objects = NULL;
+    MON_XP_SHARED_OBJECT_PUBLIC* pubOut;
+    ULONG count = 0;
+    ULONG headerSize, entrySize, requiredSize;
+    NTSTATUS status;
+
+    if (Out == NULL || BytesOut == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    *BytesOut = 0;
+    if (!MonXpIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    status = MonXpGetSharedObjects(&objects, &count);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    headerSize = sizeof(ULONG) * 2;  /* Count + Reserved */
+    entrySize = sizeof(MON_XP_SHARED_OBJECT_PUBLIC);
+    requiredSize = headerSize + (count * entrySize);
+
+    if (OutLen < requiredSize) {
+        if (objects) ExFreePoolWithTag(objects, MON_XP_TAG);
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    /* Fill header */
+    ((PULONG)Out)[0] = count;
+    ((PULONG)Out)[1] = 0;
+
+    pubOut = (MON_XP_SHARED_OBJECT_PUBLIC*)((PUCHAR)Out + headerSize);
+
+    for (ULONG i = 0; i < count; i++) {
+        pubOut[i].ObjectAddressMasked = objects[i].ObjectAddressMasked;
+        pubOut[i].ObjectTypeIndex = objects[i].ObjectTypeIndex;
+        pubOut[i].ProcessCount = objects[i].ProcessCount;
+        pubOut[i].Flags = objects[i].Flags;
+        pubOut[i].RiskScore = objects[i].RiskScore;
+        pubOut[i].TriggeredRules = objects[i].TriggeredRules;
+        pubOut[i].HasParentChildRelation = objects[i].HasParentChildRelation;
+        pubOut[i].CommonAncestorPid = objects[i].CommonAncestorPid;
+        pubOut[i].FirstDetectedTime = objects[i].FirstDetectedTime;
+        pubOut[i].LastUpdatedTime = objects[i].LastUpdatedTime;
+        pubOut[i].HasSectionBacking = objects[i].HasSectionBacking;
+        pubOut[i].Reserved = 0;
+        /* Copy up to 8 process entries */
+        for (ULONG j = 0; j < 8 && j < objects[i].ProcessCount; j++) {
+            pubOut[i].Processes[j].ProcessId = objects[i].Processes[j].ProcessId;
+            pubOut[i].Processes[j].HandleValue = objects[i].Processes[j].HandleValue;
+            pubOut[i].Processes[j].AccessMask = objects[i].Processes[j].AccessMask;
+            pubOut[i].Processes[j].IntegrityLevel = objects[i].Processes[j].IntegrityLevel;
+            pubOut[i].Processes[j].SessionId = objects[i].Processes[j].SessionId;
+        }
+    }
+
+    if (objects) ExFreePoolWithTag(objects, MON_XP_TAG);
+    *BytesOut = requiredSize;
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlXpGetTree
+ * @purpose    Get process relationship tree
+ */
+static NTSTATUS MonIoctlXpGetTree(PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    if (Out == NULL || BytesOut == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    *BytesOut = 0;
+    if (!MonXpIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    MON_XP_PROCESS_ENTRY* entries = NULL;
+    ULONG count = 0;
+    NTSTATUS status = MonXpGetProcessTree(&entries, &count);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    /* Calculate required size */
+    ULONG headerSize = sizeof(ULONG) * 2;
+    ULONG entrySize = sizeof(MON_XP_PROCESS_ENTRY_PUBLIC);
+    ULONG requiredSize = headerSize + (count * entrySize);
+
+    if (OutLen < requiredSize) {
+        if (entries) ExFreePoolWithTag(entries, MON_XP_TAG);
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    /* Fill output buffer */
+    PULONG header = (PULONG)Out;
+    header[0] = count;
+    header[1] = 0;
+
+    MON_XP_PROCESS_ENTRY_PUBLIC* pubOut =
+        (MON_XP_PROCESS_ENTRY_PUBLIC*)((PUCHAR)Out + headerSize);
+
+    for (ULONG i = 0; i < count; i++) {
+        MonXpConvertProcessEntryToPublic(&entries[i], &pubOut[i]);
+    }
+
+    if (entries) ExFreePoolWithTag(entries, MON_XP_TAG);
+    *BytesOut = requiredSize;
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlXpScanSections
+ * @purpose    Enumerate section objects for a process
+ */
+static NTSTATUS MonIoctlXpScanSections(
+    PVOID In, ULONG InLen, PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    MON_XP_SECTION_INFO* sections = NULL;
+    MON_XP_SECTION_INFO_PUBLIC* pubOut;
+    HANDLE targetPid;
+    ULONG count = 0;
+    ULONG headerSize, entrySize, requiredSize;
+    NTSTATUS status;
+
+    if (In == NULL || Out == NULL || BytesOut == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (InLen < sizeof(ULONG64)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    *BytesOut = 0;
+    if (!MonXpIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    targetPid = (HANDLE)(*(PULONG64)In);
+    status = MonXpScanSections(targetPid, &sections, &count);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    headerSize = sizeof(ULONG) * 2;
+    entrySize = sizeof(MON_XP_SECTION_INFO_PUBLIC);
+    requiredSize = headerSize + (count * entrySize);
+
+    if (OutLen < requiredSize) {
+        if (sections) ExFreePoolWithTag(sections, MON_XP_TAG);
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    /* Fill header */
+    ((PULONG)Out)[0] = count;
+    ((PULONG)Out)[1] = 0;
+
+    pubOut = (MON_XP_SECTION_INFO_PUBLIC*)((PUCHAR)Out + headerSize);
+
+    for (ULONG i = 0; i < count; i++) {
+        pubOut[i].SectionAddressMasked = (ULONG64)sections[i].SectionAddress;
+        RtlCopyMemory(pubOut[i].SectionName, sections[i].SectionName,
+            sizeof(pubOut[i].SectionName));
+        pubOut[i].IsNamed = (sections[i].SectionName[0] != L'\0') ? 1 : 0;
+        pubOut[i].MappingCount = 0;  /* Not tracked */
+        pubOut[i].MaximumSize = sections[i].SectionSize;
+        pubOut[i].AllocationAttributes = sections[i].Protection;
+        pubOut[i].RelatedToIoRing = (sections[i].Flags & 0x1) ? 1 : 0;
+        pubOut[i].RelatedIoRingPid = (ULONG)(ULONG_PTR)sections[i].OwnerProcessId;
+        pubOut[i].Reserved = 0;
+    }
+
+    if (sections) ExFreePoolWithTag(sections, MON_XP_TAG);
+    *BytesOut = requiredSize;
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlXpGetAlerts
+ * @purpose    Get cross-process detection alerts
+ */
+static NTSTATUS MonIoctlXpGetAlerts(PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    if (Out == NULL || BytesOut == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    *BytesOut = 0;
+    if (!MonXpIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    MON_XP_ALERT_EVENT* alerts = NULL;
+    ULONG count = 0;
+    NTSTATUS status = MonXpGetAlerts(&alerts, &count);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    /* Calculate required size */
+    ULONG headerSize = sizeof(ULONG) * 2;
+    ULONG entrySize = sizeof(MON_XP_ALERT_EVENT_PUBLIC);
+    ULONG requiredSize = headerSize + (count * entrySize);
+
+    if (OutLen < requiredSize) {
+        if (alerts) ExFreePoolWithTag(alerts, MON_XP_TAG);
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    /* Fill output buffer */
+    PULONG header = (PULONG)Out;
+    header[0] = count;
+    header[1] = 0;
+
+    MON_XP_ALERT_EVENT_PUBLIC* pubOut =
+        (MON_XP_ALERT_EVENT_PUBLIC*)((PUCHAR)Out + headerSize);
+
+    for (ULONG i = 0; i < count; i++) {
+        MonXpConvertAlertToPublic(&alerts[i], &pubOut[i]);
+    }
+
+    if (alerts) ExFreePoolWithTag(alerts, MON_XP_TAG);
+    *BytesOut = requiredSize;
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlXpGetStats
+ * @purpose    Get cross-process detection statistics
+ */
+static NTSTATUS MonIoctlXpGetStats(PVOID Out, ULONG OutLen)
+{
+    if (Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (OutLen < sizeof(MON_XP_STATS_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+    if (!MonXpIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    MON_XP_STATS internalStats;
+    MonXpGetStats(&internalStats);
+
+    MON_XP_STATS_PUBLIC* pubOut = (MON_XP_STATS_PUBLIC*)Out;
+    pubOut->Size = sizeof(MON_XP_STATS_PUBLIC);
+    pubOut->Reserved = 0;
+    pubOut->TotalScansPerformed = internalStats.TotalScansPerformed;
+    pubOut->SharedObjectsDetected = internalStats.SharedObjectsDetected;
+    pubOut->UnrelatedSharingCount = internalStats.UnrelatedSharingCount;
+    pubOut->CrossIntegritySharingCount = internalStats.CrossIntegritySharingCount;
+    pubOut->SystemAccessCount = internalStats.SystemAccessCount;
+    pubOut->HandleDuplicationCount = internalStats.HandleDuplicationCount;
+    pubOut->SectionSharingCount = internalStats.SectionSharingCount;
+    pubOut->InheritanceAnomalyCount = internalStats.InheritanceAnomalyCount;
+    pubOut->TotalAlertsGenerated = internalStats.TotalAlertsGenerated;
+    pubOut->ProcessesTracked = internalStats.ProcessesTracked;
+    pubOut->AverageScanTimeUs = internalStats.AverageScanTimeUs;
+
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlXpGetConfig
+ * @purpose    Get cross-process detection configuration
+ */
+static NTSTATUS MonIoctlXpGetConfig(PVOID Out, ULONG OutLen)
+{
+    if (Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (OutLen < sizeof(MON_XP_CONFIG_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+    if (!MonXpIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    MON_XP_CONFIG internalConfig;
+    MonXpGetConfig(&internalConfig);
+
+    MON_XP_CONFIG_PUBLIC* pubOut = (MON_XP_CONFIG_PUBLIC*)Out;
+    pubOut->Size = sizeof(MON_XP_CONFIG_PUBLIC);
+    pubOut->Reserved = 0;
+    pubOut->Enabled = internalConfig.Enabled;
+    pubOut->ScanIntervalMs = internalConfig.ScanIntervalMs;
+    pubOut->AlertThreshold = internalConfig.AlertThreshold;
+    pubOut->CriticalThreshold = internalConfig.CriticalThreshold;
+    pubOut->WhitelistEnabled = internalConfig.WhitelistEnabled;
+    pubOut->MaxAlertsPerMinute = internalConfig.MaxAlertsPerMinute;
+    pubOut->ProcessTreeRefreshMs = internalConfig.ProcessTreeRefreshMs;
+
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlXpSetConfig
+ * @purpose    Set cross-process detection configuration
+ */
+static NTSTATUS MonIoctlXpSetConfig(PVOID In, ULONG InLen)
+{
+    if (In == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (InLen < sizeof(MON_XP_CONFIG_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+    if (!MonXpIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    const MON_XP_CONFIG_PUBLIC* pubIn = (const MON_XP_CONFIG_PUBLIC*)In;
+    if (pubIn->Size != sizeof(MON_XP_CONFIG_PUBLIC)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    MON_XP_CONFIG newConfig;
+    newConfig.Enabled = pubIn->Enabled;
+    newConfig.ScanIntervalMs = pubIn->ScanIntervalMs;
+    newConfig.AlertThreshold = pubIn->AlertThreshold;
+    newConfig.CriticalThreshold = pubIn->CriticalThreshold;
+    newConfig.WhitelistEnabled = pubIn->WhitelistEnabled;
+    newConfig.MaxAlertsPerMinute = pubIn->MaxAlertsPerMinute;
+    newConfig.ProcessTreeRefreshMs = pubIn->ProcessTreeRefreshMs;
+
+    return MonXpSetConfig(&newConfig);
+}
+
+/**
+ * @function   MonIoctlXpScanNow
+ * @purpose    Trigger immediate cross-process scan
+ */
+static NTSTATUS MonIoctlXpScanNow(VOID)
+{
+    if (!MonXpIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    return MonXpScanNow();
 }
 
 /*---------------------------------------------------------------------------

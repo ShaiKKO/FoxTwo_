@@ -68,6 +68,7 @@ extern "C" {
 #define WIN11MON_CAP_PROCESS_PROFILE       0x00008000u  /* Phase 7: Process profiling */
 #define WIN11MON_CAP_ANOMALY_RULES         0x00010000u  /* Phase 7: Anomaly rule engine */
 #define WIN11MON_CAP_MEM_MONITOR           0x00020000u  /* Phase 8: Memory region monitoring */
+#define WIN11MON_CAP_CROSS_PROCESS         0x00040000u  /* Phase 9: Cross-process detection */
 
 /* IOCTL Contracts (METHOD_BUFFERED, FILE_DEVICE_UNKNOWN) ----------------- */
 
@@ -313,6 +314,58 @@ extern "C" {
  *  - Output: MON_MEM_STATS_PUBLIC
  */
 #define IOCTL_MONITOR_MEM_GET_STATS        CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x44, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* Cross-Process Detection IOCTLs (v1.5+ Phase 9) -----------------------------*/
+
+/* IOCTL_MONITOR_XP_GET_SHARED
+ *  - Query shared IoRing objects (optionally filtered by process).
+ *  - Input: ULONG (ProcessId, 0 = all)
+ *  - Output: MON_XP_SHARED_OBJECT_PUBLIC array
+ */
+#define IOCTL_MONITOR_XP_GET_SHARED        CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x50, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_XP_GET_TREE
+ *  - Get process relationship tree snapshot.
+ *  - Output: MON_XP_PROCESS_ENTRY_PUBLIC array
+ */
+#define IOCTL_MONITOR_XP_GET_TREE          CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x51, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_XP_SCAN_SECTIONS
+ *  - Enumerate section objects for cross-process correlation.
+ *  - Input: ULONG (ProcessId)
+ *  - Output: MON_XP_SECTION_INFO_PUBLIC array
+ */
+#define IOCTL_MONITOR_XP_SCAN_SECTIONS     CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x52, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_XP_GET_ALERTS
+ *  - Retrieve pending cross-process alerts.
+ *  - Output: MON_XP_ALERT_EVENT_PUBLIC array
+ */
+#define IOCTL_MONITOR_XP_GET_ALERTS        CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x53, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_XP_GET_STATS
+ *  - Get cross-process detection statistics.
+ *  - Output: MON_XP_STATS_PUBLIC
+ */
+#define IOCTL_MONITOR_XP_GET_STATS         CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x54, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_XP_GET_CONFIG
+ *  - Get cross-process detection configuration.
+ *  - Output: MON_XP_CONFIG_PUBLIC
+ */
+#define IOCTL_MONITOR_XP_GET_CONFIG        CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x55, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_XP_SET_CONFIG
+ *  - Set cross-process detection configuration.
+ *  - Input: MON_XP_CONFIG_PUBLIC
+ */
+#define IOCTL_MONITOR_XP_SET_CONFIG        CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x56, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* IOCTL_MONITOR_XP_SCAN_NOW
+ *  - Trigger immediate cross-process scan.
+ *  - No input/output.
+ */
+#define IOCTL_MONITOR_XP_SCAN_NOW          CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x57, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 
 /*--------------------------------------------------------------------------*/
 /* Public Data Schemas                                                      */
@@ -902,6 +955,178 @@ typedef struct _MON_MEM_ANOMALY_EVENT_PUBLIC {
 #define MonEvent_ProfileCreated          12
 #define MonEvent_ProfileDestroyed        13
 #define MonEvent_BurstDetected           14
+#endif
+
+/*--------------------------------------------------------------------------*/
+/* Cross-Process Detection Schemas (v1.5+ Phase 9)                           */
+/*--------------------------------------------------------------------------*/
+
+/* Cross-process alert types (public) */
+typedef enum _MON_XP_ALERT_TYPE_PUBLIC {
+    MonXpAlert_None_Pub = 0,
+    MonXpAlert_SharedIoRing_Pub = 1,            /* IoRing in multiple processes */
+    MonXpAlert_UnrelatedSharing_Pub = 2,        /* Non-parent/child sharing */
+    MonXpAlert_CrossIntegrityShare_Pub = 3,    /* Different integrity levels */
+    MonXpAlert_SystemIoRingAccess_Pub = 4,     /* SYSTEM has user IoRing */
+    MonXpAlert_HandleDuplication_Pub = 5,       /* DuplicateHandle detected */
+    MonXpAlert_SectionSharing_Pub = 6,          /* Section shared with IoRing */
+    MonXpAlert_InheritanceAnomaly_Pub = 7,      /* Unexpected inheritance */
+    MonXpAlert_Max_Pub = 8
+} MON_XP_ALERT_TYPE_PUBLIC;
+
+/* Cross-process severity (public, aligned with anomaly severity) */
+typedef enum _MON_XP_SEVERITY_PUBLIC {
+    MonXpSeverity_Info_Pub = 0,
+    MonXpSeverity_Low_Pub = 1,
+    MonXpSeverity_Medium_Pub = 2,
+    MonXpSeverity_High_Pub = 3,
+    MonXpSeverity_Critical_Pub = 4
+} MON_XP_SEVERITY_PUBLIC;
+
+/* Cross-process rule IDs (100-105 range, public) */
+typedef enum _MON_XP_RULE_ID_PUBLIC {
+    MonXpRule_None_Pub = 0,
+    MonXpRule_UnrelatedIoRingSharing_Pub = 100,
+    MonXpRule_SystemIoRingFromUser_Pub = 101,
+    MonXpRule_CrossIntegrityIoRing_Pub = 102,
+    MonXpRule_SectionIoRingBuffer_Pub = 103,
+    MonXpRule_UnexpectedInheritance_Pub = 104,
+    MonXpRule_RapidDuplication_Pub = 105,
+    MonXpRule_Max_Pub = 106
+} MON_XP_RULE_ID_PUBLIC;
+
+/* Shared object flags (public) */
+#define MON_XP_FLAG_CROSS_INTEGRITY_PUB     0x0001
+#define MON_XP_FLAG_CROSS_SESSION_PUB       0x0002
+#define MON_XP_FLAG_SYSTEM_INVOLVED_PUB     0x0004
+#define MON_XP_FLAG_SERVICE_INVOLVED_PUB    0x0008
+#define MON_XP_FLAG_UNRELATED_PUB           0x0010
+#define MON_XP_FLAG_SUSPICIOUS_PUB          0x0020
+#define MON_XP_FLAG_INHERITED_PUB           0x0040
+#define MON_XP_FLAG_WHITELISTED_PUB         0x0080
+
+/* Process cache flags (public) */
+#define MON_XP_PROC_FLAG_ELEVATED_PUB       0x0001
+#define MON_XP_PROC_FLAG_SERVICE_PUB        0x0002
+#define MON_XP_PROC_FLAG_SYSTEM_PUB         0x0004
+#define MON_XP_PROC_FLAG_INTERACTIVE_PUB    0x0008
+#define MON_XP_PROC_FLAG_TERMINATED_PUB     0x0010
+
+/* Handle entry within shared object (public) */
+typedef struct _MON_XP_HANDLE_ENTRY_PUBLIC {
+    ULONG       ProcessId;
+    ULONG64     HandleValue;
+    ULONG       AccessMask;
+    ULONG       IntegrityLevel;
+    ULONG       SessionId;
+    ULONG       IsInherited;            /* BOOLEAN as ULONG */
+    ULONG64     FirstSeenTime;
+} MON_XP_HANDLE_ENTRY_PUBLIC, *PMON_XP_HANDLE_ENTRY_PUBLIC;
+
+/* Shared object record (IOCTL_MONITOR_XP_GET_SHARED output element) */
+typedef struct _MON_XP_SHARED_OBJECT_PUBLIC {
+    ULONG64     ObjectAddressMasked;
+    ULONG       ObjectTypeIndex;
+    ULONG       ProcessCount;
+    ULONG       Flags;                  /* MON_XP_FLAG_*_PUB */
+    ULONG       RiskScore;              /* 0-100 */
+    ULONG       TriggeredRules;         /* Bitmask */
+    ULONG       HasParentChildRelation; /* BOOLEAN as ULONG */
+    ULONG       CommonAncestorPid;
+    ULONG64     FirstDetectedTime;
+    ULONG64     LastUpdatedTime;
+    ULONG       HasSectionBacking;      /* BOOLEAN as ULONG */
+    ULONG       Reserved;
+    /* Up to 8 processes inline (variable count) */
+    MON_XP_HANDLE_ENTRY_PUBLIC Processes[8];
+} MON_XP_SHARED_OBJECT_PUBLIC, *PMON_XP_SHARED_OBJECT_PUBLIC;
+
+/* Process tree entry (IOCTL_MONITOR_XP_GET_TREE output element) */
+typedef struct _MON_XP_PROCESS_ENTRY_PUBLIC {
+    ULONG       ProcessId;
+    ULONG       ParentProcessId;
+    ULONG       SessionId;
+    ULONG       IntegrityLevel;
+    ULONG       Flags;                  /* MON_XP_PROC_FLAG_*_PUB */
+    ULONG       Reserved;
+    ULONG64     CreateTime;
+    WCHAR       ImageName[32];
+} MON_XP_PROCESS_ENTRY_PUBLIC, *PMON_XP_PROCESS_ENTRY_PUBLIC;
+
+/* Section info (IOCTL_MONITOR_XP_SCAN_SECTIONS output element) */
+typedef struct _MON_XP_SECTION_INFO_PUBLIC {
+    ULONG64     SectionAddressMasked;
+    WCHAR       SectionName[64];
+    ULONG       IsNamed;                /* BOOLEAN as ULONG */
+    ULONG       MappingCount;
+    ULONG64     MaximumSize;
+    ULONG       AllocationAttributes;
+    ULONG       RelatedToIoRing;        /* BOOLEAN as ULONG */
+    ULONG       RelatedIoRingPid;
+    ULONG       Reserved;
+} MON_XP_SECTION_INFO_PUBLIC, *PMON_XP_SECTION_INFO_PUBLIC;
+
+/* Alert event (IOCTL_MONITOR_XP_GET_ALERTS output / ring buffer event) */
+typedef struct _MON_XP_ALERT_EVENT_PUBLIC {
+    ULONG       Size;
+    MON_XP_ALERT_TYPE_PUBLIC AlertType;
+    MON_XP_SEVERITY_PUBLIC Severity;
+    ULONG       RuleId;
+    ULONG64     Timestamp;
+    ULONG64     ObjectAddressMasked;
+    ULONG       ObjectTypeIndex;
+    ULONG       SourceProcessId;
+    ULONG       TargetProcessId;
+    WCHAR       SourceProcessName[32];
+    WCHAR       TargetProcessName[32];
+    ULONG64     SourceHandle;
+    ULONG64     TargetHandle;
+    ULONG       SourceAccess;
+    ULONG       TargetAccess;
+    ULONG       IsParentChild;          /* BOOLEAN as ULONG */
+    ULONG       SourceIntegrity;
+    ULONG       TargetIntegrity;
+    ULONG       RiskScore;
+    CHAR        MitreTechnique[16];
+    CHAR        Description[64];
+} MON_XP_ALERT_EVENT_PUBLIC, *PMON_XP_ALERT_EVENT_PUBLIC;
+
+/* Statistics (IOCTL_MONITOR_XP_GET_STATS output) */
+typedef struct _MON_XP_STATS_PUBLIC {
+    ULONG       Size;
+    ULONG       Reserved;
+    ULONG       ActiveSharedObjects;
+    ULONG       TotalSharedObjectsDetected;
+    ULONG       TotalAlertsGenerated;
+    ULONG       AlertsSuppressedByWhitelist;
+    ULONG       TotalScans;
+    ULONG       CachedProcessCount;
+    ULONG64     LastScanTime;
+    ULONG64     LastTreeRefreshTime;
+    ULONG       RuleHits[8];
+} MON_XP_STATS_PUBLIC, *PMON_XP_STATS_PUBLIC;
+
+/* Configuration (IOCTL_MONITOR_XP_GET/SET_CONFIG) */
+typedef struct _MON_XP_CONFIG_PUBLIC {
+    ULONG       Size;
+    ULONG       Enabled;                /* BOOLEAN as ULONG */
+    ULONG       WhitelistEnabled;       /* BOOLEAN as ULONG */
+    ULONG       AutoBlockCritical;      /* BOOLEAN as ULONG */
+    ULONG       ScanIntervalMs;
+    ULONG       TreeRefreshIntervalMs;
+    ULONG       AlertThreshold;         /* Score threshold (default 40) */
+    ULONG       CriticalThreshold;      /* Critical score (default 80) */
+    ULONG       MaxAlertsPerMinute;
+    ULONG       Reserved;
+} MON_XP_CONFIG_PUBLIC, *PMON_XP_CONFIG_PUBLIC;
+
+/* Phase 9 event types (extend MONITOR_EVENT_TYPE) */
+#ifndef MON_EVENT_PHASE9_DEFINED
+#define MON_EVENT_PHASE9_DEFINED
+#define MonEvent_CrossProcess            19
+#define MonEvent_SharedObjectDetected    20
+#define MonEvent_ProcessTreeUpdated      21
+#define MonEvent_CrossProcessAlert       22
 #endif
 
 #ifdef __cplusplus
