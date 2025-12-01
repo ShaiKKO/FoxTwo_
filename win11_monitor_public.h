@@ -67,6 +67,7 @@ extern "C" {
 #define WIN11MON_CAP_IORING_INTERCEPT      0x00004000u  /* Phase 6: IoRing interception */
 #define WIN11MON_CAP_PROCESS_PROFILE       0x00008000u  /* Phase 7: Process profiling */
 #define WIN11MON_CAP_ANOMALY_RULES         0x00010000u  /* Phase 7: Anomaly rule engine */
+#define WIN11MON_CAP_MEM_MONITOR           0x00020000u  /* Phase 8: Memory region monitoring */
 
 /* IOCTL Contracts (METHOD_BUFFERED, FILE_DEVICE_UNKNOWN) ----------------- */
 
@@ -276,6 +277,42 @@ extern "C" {
  *  - No input/output.
  */
 #define IOCTL_MONITOR_ANOMALY_RESET_STATS  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x3C, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+/* Memory Monitoring IOCTLs (v1.4+ Phase 8) ----------------------------------*/
+
+/* IOCTL_MONITOR_MEM_SCAN_VAD
+ *  - Scan VAD tree for a process.
+ *  - Input: ULONG (ProcessId)
+ *  - Output: MON_VAD_SCAN_RESULT_PUBLIC (variable length with VAD array)
+ */
+#define IOCTL_MONITOR_MEM_SCAN_VAD         CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x40, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_MEM_GET_MDLS
+ *  - Get tracked MDLs for a process.
+ *  - Input: ULONG (ProcessId)
+ *  - Output: MON_MDL_TRACKER_PUBLIC
+ */
+#define IOCTL_MONITOR_MEM_GET_MDLS         CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x41, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_MEM_SCAN_PHYSICAL
+ *  - Analyze physical page mappings for a process.
+ *  - Input: ULONG (ProcessId)
+ *  - Output: MON_PHYSICAL_SCAN_RESULT_PUBLIC
+ */
+#define IOCTL_MONITOR_MEM_SCAN_PHYSICAL    CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x42, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_MEM_GET_SHARING
+ *  - Detect cross-process memory sharing.
+ *  - Input: ULONG (ProcessId)
+ *  - Output: MON_SHARING_SCAN_RESULT_PUBLIC (variable length)
+ */
+#define IOCTL_MONITOR_MEM_GET_SHARING      CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x43, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* IOCTL_MONITOR_MEM_GET_STATS
+ *  - Get memory monitoring statistics.
+ *  - Output: MON_MEM_STATS_PUBLIC
+ */
+#define IOCTL_MONITOR_MEM_GET_STATS        CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x44, METHOD_BUFFERED, FILE_READ_ACCESS)
 
 /*--------------------------------------------------------------------------*/
 /* Public Data Schemas                                                      */
@@ -679,6 +716,183 @@ typedef struct _MON_ANOMALY_EVENT_PUBLIC {
     ULONG64     Timestamp;
     CHAR        MitreTechnique[16];
 } MON_ANOMALY_EVENT_PUBLIC, *PMON_ANOMALY_EVENT_PUBLIC;
+
+/*--------------------------------------------------------------------------*/
+/* Memory Monitoring Schemas (v1.4+ Phase 8)                                 */
+/*--------------------------------------------------------------------------*/
+
+/* VAD type enumeration (public) */
+typedef enum _MON_VAD_TYPE_PUBLIC {
+    MonVadType_Private_Pub = 0,
+    MonVadType_Mapped_Pub = 1,
+    MonVadType_Image_Pub = 2,
+    MonVadType_Physical_Pub = 3,
+    MonVadType_WriteWatch_Pub = 4,
+    MonVadType_LargePages_Pub = 5,
+    MonVadType_Rotate_Pub = 6,
+    MonVadType_Unknown_Pub = 7
+} MON_VAD_TYPE_PUBLIC;
+
+/* Memory anomaly types (public) */
+typedef enum _MON_MEM_ANOMALY_PUBLIC {
+    MonMemAnomaly_None_Pub = 0,
+    MonMemAnomaly_ExecutableHeap_Pub = 1,      /* Private + Executable */
+    MonMemAnomaly_WritableCode_Pub = 2,        /* Image + Writable + Executable */
+    MonMemAnomaly_UnbackedExecutable_Pub = 3,  /* No file backing, executable */
+    MonMemAnomaly_HiddenRegion_Pub = 4,        /* VAD present, no PTE */
+    MonMemAnomaly_DoubleMapped_Pub = 5,        /* Same physical in multiple VA */
+    MonMemAnomaly_CrossProcessSharing_Pub = 6, /* Unexpected sharing */
+    MonMemAnomaly_KernelAddressInUser_Pub = 7, /* Kernel address in user VAD */
+    MonMemAnomaly_GuardPageMissing_Pub = 8,    /* Stack without guard */
+    MonMemAnomaly_SuspiciousProtection_Pub = 9,/* Unusual protection combo */
+    MonMemAnomaly_LargePrivateRegion_Pub = 10, /* Unusually large private */
+    MonMemAnomaly_RWXRegion_Pub = 11,          /* Read-Write-Execute */
+    MonMemAnomaly_MdlLocked_Pub = 12,          /* MDL locked pages */
+    MonMemAnomaly_Max_Pub = 13
+} MON_MEM_ANOMALY_PUBLIC;
+
+/* Single VAD info (public) */
+typedef struct _MON_VAD_INFO_PUBLIC {
+    ULONG64     StartAddress;       /* Masked */
+    ULONG64     EndAddress;         /* Masked */
+    ULONG64     Size;
+    MON_VAD_TYPE_PUBLIC VadType;
+    ULONG       Protection;
+    ULONG       InitialProtection;
+    ULONG       IsExecutable;       /* BOOLEAN as ULONG */
+    ULONG       IsWritable;         /* BOOLEAN as ULONG */
+    ULONG       IsPrivate;          /* BOOLEAN as ULONG */
+    ULONG       IsCommitted;        /* BOOLEAN as ULONG */
+    ULONG       HasFileBackingStore; /* BOOLEAN as ULONG */
+    ULONG       AnomalyFlags;       /* Bitmask of MON_MEM_ANOMALY_PUBLIC */
+} MON_VAD_INFO_PUBLIC, *PMON_VAD_INFO_PUBLIC;
+
+/* VAD scan result (IOCTL_MONITOR_MEM_SCAN_VAD output) */
+typedef struct _MON_VAD_SCAN_RESULT_PUBLIC {
+    ULONG       Size;               /* sizeof(MON_VAD_SCAN_RESULT_PUBLIC) */
+    ULONG       ProcessId;
+    ULONG       VadCount;           /* Total VADs found */
+    ULONG       DetailedInfoCount;  /* Number of MON_VAD_INFO_PUBLIC following */
+    ULONG64     TotalPrivateBytes;
+    ULONG64     TotalMappedBytes;
+    ULONG64     TotalExecutableBytes;
+    ULONG64     TotalCommittedBytes;
+    ULONG       SuspiciousVadCount;
+    ULONG       AnomalyFlags;       /* Aggregate bitmask */
+    ULONG64     ScanStartTime;
+    ULONG64     ScanEndTime;
+    ULONG       ScanDurationUs;
+    ULONG       Reserved;
+    /* MON_VAD_INFO_PUBLIC array follows */
+} MON_VAD_SCAN_RESULT_PUBLIC, *PMON_VAD_SCAN_RESULT_PUBLIC;
+
+/* MDL info (public) */
+typedef struct _MON_MDL_INFO_PUBLIC {
+    ULONG64     VirtualAddress;     /* Masked */
+    ULONG64     ByteCount;
+    ULONG64     ByteOffset;
+    ULONG       ProcessId;
+    ULONG       Flags;
+    ULONG       PageCount;
+    ULONG       IsLocked;           /* BOOLEAN as ULONG */
+    ULONG       IsMapped;           /* BOOLEAN as ULONG */
+    ULONG       IsNonPagedPool;     /* BOOLEAN as ULONG */
+    ULONG64     CreationTime;
+    ULONG       AnomalyFlags;
+    ULONG       Reserved;
+} MON_MDL_INFO_PUBLIC, *PMON_MDL_INFO_PUBLIC;
+
+/* MDL tracker output (IOCTL_MONITOR_MEM_GET_MDLS output) */
+typedef struct _MON_MDL_TRACKER_PUBLIC {
+    ULONG       Size;
+    ULONG       ProcessId;
+    ULONG       TrackedMdlCount;
+    ULONG       MaxMdlsReturned;
+    ULONG64     TotalLockedBytes;
+    ULONG64     TotalMappedBytes;
+    ULONG       SuspiciousMdlCount;
+    ULONG       Reserved;
+    /* MON_MDL_INFO_PUBLIC array follows */
+} MON_MDL_TRACKER_PUBLIC, *PMON_MDL_TRACKER_PUBLIC;
+
+/* Physical scan result (IOCTL_MONITOR_MEM_SCAN_PHYSICAL output) */
+typedef struct _MON_PHYSICAL_SCAN_RESULT_PUBLIC {
+    ULONG       Size;
+    ULONG       ProcessId;
+    ULONG64     TotalPhysicalBytes;
+    ULONG64     WorkingSetBytes;
+    ULONG       PageCount;
+    ULONG       SharedPageCount;
+    ULONG       PrivatePageCount;
+    ULONG       ModifiedPageCount;
+    ULONG       DoubleMappedCount;  /* Same PFN in multiple VAs */
+    ULONG       SuspiciousCount;
+    ULONG       AnomalyFlags;
+    ULONG       ScanDurationUs;
+} MON_PHYSICAL_SCAN_RESULT_PUBLIC, *PMON_PHYSICAL_SCAN_RESULT_PUBLIC;
+
+/* Shared region info (public) */
+typedef struct _MON_SHARED_REGION_PUBLIC {
+    ULONG64     VirtualAddress;     /* Masked */
+    ULONG64     Size;
+    ULONG       ProcessIdOwner;
+    ULONG       ProcessIdSharer;
+    ULONG       ShareType;          /* Section, mapped file, etc. */
+    ULONG       IsExecutable;       /* BOOLEAN as ULONG */
+    ULONG       AnomalyFlags;
+    ULONG       Reserved;
+} MON_SHARED_REGION_PUBLIC, *PMON_SHARED_REGION_PUBLIC;
+
+/* Sharing scan result (IOCTL_MONITOR_MEM_GET_SHARING output) */
+typedef struct _MON_SHARING_SCAN_RESULT_PUBLIC {
+    ULONG       Size;
+    ULONG       ProcessId;
+    ULONG       SharedRegionCount;
+    ULONG       SuspiciousShareCount;
+    ULONG64     TotalSharedBytes;
+    ULONG       CrossProcessShareCount;
+    ULONG       Reserved;
+    /* MON_SHARED_REGION_PUBLIC array follows */
+} MON_SHARING_SCAN_RESULT_PUBLIC, *PMON_SHARING_SCAN_RESULT_PUBLIC;
+
+/* Memory monitoring statistics (IOCTL_MONITOR_MEM_GET_STATS output) */
+typedef struct _MON_MEM_STATS_PUBLIC {
+    ULONG       Size;
+    ULONG       Reserved;
+    ULONG64     VadScansPerformed;
+    ULONG64     MdlScansPerformed;
+    ULONG64     PhysicalScansPerformed;
+    ULONG64     SharingScansPerformed;
+    ULONG64     TotalAnomaliesDetected;
+    ULONG       TrackedMdlCount;
+    ULONG       TrackedProcessCount;
+    ULONG64     TotalBytesScanned;
+    ULONG       AverageVadScanTimeUs;
+    ULONG       PeakVadScanTimeUs;
+    ULONG       AnomaliesByType[16]; /* Count per MON_MEM_ANOMALY_PUBLIC */
+} MON_MEM_STATS_PUBLIC, *PMON_MEM_STATS_PUBLIC;
+
+/* Memory anomaly event (ring buffer event payload) */
+typedef struct _MON_MEM_ANOMALY_EVENT_PUBLIC {
+    ULONG       Size;
+    ULONG       ProcessId;
+    ULONG       AnomalyType;
+    ULONG       Severity;
+    ULONG64     Address;            /* Masked */
+    ULONG64     Size_Region;
+    ULONG64     Timestamp;
+    CHAR        MitreTechnique[16];
+    WCHAR       Description[64];
+} MON_MEM_ANOMALY_EVENT_PUBLIC, *PMON_MEM_ANOMALY_EVENT_PUBLIC;
+
+/* Phase 8 event types (extend MONITOR_EVENT_TYPE) */
+#ifndef MON_EVENT_PHASE8_DEFINED
+#define MON_EVENT_PHASE8_DEFINED
+#define MonEvent_MemoryAnomalyDetected   15
+#define MonEvent_VadScanCompleted        16
+#define MonEvent_MdlTracked              17
+#define MonEvent_SuspiciousSharingFound  18
+#endif
 
 /* Add MonEvent types for Phase 7 */
 #ifndef MON_EVENT_PHASE7_DEFINED

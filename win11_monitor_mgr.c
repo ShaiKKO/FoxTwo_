@@ -45,6 +45,7 @@
 #include "ioring_intercept.h" /* IoRing interception (Phase 6) */
 #include "process_profile.h"  /* Process behavior profiling (Phase 7) */
 #include "anomaly_rules.h"    /* Anomaly detection rules (Phase 7) */
+#include "mem_monitor.h"      /* Memory region monitoring (Phase 8) */
 
 #pragma warning(push)
 #pragma warning(disable: 4201) /* nameless struct/union in SAL headers */
@@ -114,6 +115,13 @@ static NTSTATUS MonIoctlAnomalySetThreshold(_In_reads_bytes_(InLen) PVOID In, _I
 static NTSTATUS MonIoctlAnomalyEnableRule(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen);
 static NTSTATUS MonIoctlAnomalyGetStats(_Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
 static NTSTATUS MonIoctlAnomalyResetStats(VOID);
+
+/* Memory Monitoring IOCTLs (Phase 8) */
+static NTSTATUS MonIoctlMemScanVad(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+static NTSTATUS MonIoctlMemGetMdls(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+static NTSTATUS MonIoctlMemScanPhysical(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
+static NTSTATUS MonIoctlMemGetSharing(_In_reads_bytes_(InLen) PVOID In, _In_ ULONG InLen, _Out_writes_bytes_to_(OutLen, *BytesOut) PVOID Out, _In_ ULONG OutLen, _Out_ ULONG* BytesOut);
+static NTSTATUS MonIoctlMemGetStats(_Out_writes_bytes_(OutLen) PVOID Out, _In_ ULONG OutLen);
 
 /* Timer DPC -> schedules pool scan work */
 _Function_class_(KDEFERRED_ROUTINE)
@@ -240,6 +248,14 @@ DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
             "[WIN11MON] Anomaly rules init failed: 0x%08X\n", status);
     }
 
+    /* Initialize memory region monitoring (Phase 8) */
+    status = MonMemInitialize();
+    if (!NT_SUCCESS(status)) {
+        /* Non-fatal: continue without memory monitoring */
+        DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+            "[WIN11MON] Memory monitor init failed: 0x%08X\n", status);
+    }
+
     /* Timer/DPC for periodic scanning */
     KeInitializeTimer(&g_Mon.ScanTimer);
     KeInitializeDpc(&g_Mon.ScanDpc, MonScanDpc, &g_Mon);
@@ -270,6 +286,7 @@ MonDriverUnload(PDRIVER_OBJECT DriverObject)
     MonTelemetryShutdown(&g_Mon);
 
     /* Shutdown enhancement subsystems (reverse order of init) */
+    MonMemShutdown();         /* Phase 8: Memory monitoring */
     MonAnomalyShutdown();     /* Phase 7: Anomaly rules */
     MonProfileShutdown();     /* Phase 7: Process profiling */
     MonInterceptShutdown();   /* Phase 6: IoRing interception */
@@ -523,6 +540,29 @@ MonIrpDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp)
         status = MonIoctlAnomalyResetStats();
         break;
 
+    /* Memory Monitoring IOCTLs (Phase 8) */
+    case IOCTL_MONITOR_MEM_SCAN_VAD:
+        status = MonIoctlMemScanVad(inBuf, inLen, outBuf, outLen, &bytesOut);
+        break;
+
+    case IOCTL_MONITOR_MEM_GET_MDLS:
+        status = MonIoctlMemGetMdls(inBuf, inLen, outBuf, outLen, &bytesOut);
+        break;
+
+    case IOCTL_MONITOR_MEM_SCAN_PHYSICAL:
+        status = MonIoctlMemScanPhysical(inBuf, inLen, outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_PHYSICAL_SCAN_RESULT_PUBLIC) : 0;
+        break;
+
+    case IOCTL_MONITOR_MEM_GET_SHARING:
+        status = MonIoctlMemGetSharing(inBuf, inLen, outBuf, outLen, &bytesOut);
+        break;
+
+    case IOCTL_MONITOR_MEM_GET_STATS:
+        status = MonIoctlMemGetStats(outBuf, outLen);
+        bytesOut = NT_SUCCESS(status) ? sizeof(MON_MEM_STATS_PUBLIC) : 0;
+        break;
+
     default:
         status = STATUS_INVALID_DEVICE_REQUEST;
         break;
@@ -608,6 +648,11 @@ static NTSTATUS MonIoctlGetCaps(PVOID Out, ULONG OutLen)
     }
     if (MonAnomalyIsInitialized()) {
         caps |= WIN11MON_CAP_ANOMALY_RULES;
+    }
+
+    /* Phase 8: Memory region monitoring */
+    if (MonMemIsInitialized()) {
+        caps |= WIN11MON_CAP_MEM_MONITOR;
     }
 
     RtlCopyMemory(Out, &caps, sizeof(caps));
@@ -1647,6 +1692,227 @@ static NTSTATUS MonIoctlAnomalyResetStats(VOID)
     }
 
     MonAnomalyResetStats();
+    return STATUS_SUCCESS;
+}
+
+/*---------------------------------------------------------------------------
+ * Memory Monitoring IOCTL Implementations (Phase 8)
+ *-------------------------------------------------------------------------*/
+
+/**
+ * @function   MonIoctlMemScanVad
+ * @purpose    Scan VAD tree for a process
+ */
+static NTSTATUS MonIoctlMemScanVad(PVOID In, ULONG InLen, PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    ULONG processId;
+    NTSTATUS status;
+
+    *BytesOut = 0;
+
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (Out == NULL || OutLen < sizeof(MON_VAD_SCAN_RESULT_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    if (!MonMemIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    processId = *(PULONG)In;
+
+    /* Call the kernel VAD walker */
+    status = MonVadWalkTree(processId, Out, OutLen, BytesOut);
+
+    return status;
+}
+
+/**
+ * @function   MonIoctlMemGetMdls
+ * @purpose    Get tracked MDLs for a process
+ */
+static NTSTATUS MonIoctlMemGetMdls(PVOID In, ULONG InLen, PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    ULONG processId;
+    PMON_MDL_TRACKER tracker;
+    ULONG maxMdls;
+
+    *BytesOut = 0;
+
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (Out == NULL || OutLen < sizeof(MON_MDL_TRACKER_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    if (!MonMemIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    processId = *(PULONG)In;
+
+    /* Get the MDL tracker for this process */
+    tracker = MonMemGetMdlTracker(processId);
+    if (tracker == NULL) {
+        /* Return empty result */
+        MON_MDL_TRACKER_PUBLIC* pubOut = (MON_MDL_TRACKER_PUBLIC*)Out;
+        pubOut->Size = sizeof(MON_MDL_TRACKER_PUBLIC);
+        pubOut->ProcessId = processId;
+        pubOut->TrackedMdlCount = 0;
+        pubOut->MaxMdlsReturned = 0;
+        pubOut->TotalLockedBytes = 0;
+        pubOut->TotalMappedBytes = 0;
+        pubOut->SuspiciousMdlCount = 0;
+        pubOut->Reserved = 0;
+        *BytesOut = sizeof(MON_MDL_TRACKER_PUBLIC);
+        return STATUS_SUCCESS;
+    }
+
+    /* Calculate how many MDLs can fit */
+    maxMdls = (OutLen - sizeof(MON_MDL_TRACKER_PUBLIC)) / sizeof(MON_MDL_INFO_PUBLIC);
+
+    /* Copy tracker info to public structure */
+    MON_MDL_TRACKER_PUBLIC* pubOut = (MON_MDL_TRACKER_PUBLIC*)Out;
+    pubOut->Size = sizeof(MON_MDL_TRACKER_PUBLIC);
+    pubOut->ProcessId = tracker->ProcessId;
+    pubOut->TrackedMdlCount = tracker->TrackedMdlCount;
+    pubOut->MaxMdlsReturned = min(tracker->TrackedMdlCount, maxMdls);
+    pubOut->TotalLockedBytes = tracker->TotalLockedBytes;
+    pubOut->TotalMappedBytes = tracker->TotalMappedBytes;
+    pubOut->SuspiciousMdlCount = tracker->SuspiciousMdlCount;
+    pubOut->Reserved = 0;
+
+    /* Copy MDL info array */
+    PMON_MDL_INFO_PUBLIC mdlArray = (PMON_MDL_INFO_PUBLIC)((PUCHAR)Out + sizeof(MON_MDL_TRACKER_PUBLIC));
+    for (ULONG i = 0; i < pubOut->MaxMdlsReturned && i < MON_MAX_TRACKED_MDLS; i++) {
+        mdlArray[i].VirtualAddress = tracker->Mdls[i].VirtualAddress;
+        mdlArray[i].ByteCount = tracker->Mdls[i].ByteCount;
+        mdlArray[i].ByteOffset = tracker->Mdls[i].ByteOffset;
+        mdlArray[i].ProcessId = tracker->Mdls[i].ProcessId;
+        mdlArray[i].Flags = tracker->Mdls[i].Flags;
+        mdlArray[i].PageCount = tracker->Mdls[i].PageCount;
+        mdlArray[i].IsLocked = tracker->Mdls[i].IsLocked;
+        mdlArray[i].IsMapped = tracker->Mdls[i].IsMapped;
+        mdlArray[i].IsNonPagedPool = tracker->Mdls[i].IsNonPagedPool;
+        mdlArray[i].CreationTime = tracker->Mdls[i].CreationTime;
+        mdlArray[i].AnomalyFlags = tracker->Mdls[i].AnomalyFlags;
+        mdlArray[i].Reserved = 0;
+    }
+
+    *BytesOut = sizeof(MON_MDL_TRACKER_PUBLIC) + (pubOut->MaxMdlsReturned * sizeof(MON_MDL_INFO_PUBLIC));
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlMemScanPhysical
+ * @purpose    Analyze physical page mappings for a process
+ */
+static NTSTATUS MonIoctlMemScanPhysical(PVOID In, ULONG InLen, PVOID Out, ULONG OutLen)
+{
+    ULONG processId;
+
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (Out == NULL || OutLen < sizeof(MON_PHYSICAL_SCAN_RESULT_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    if (!MonMemIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    processId = *(PULONG)In;
+
+    /* Physical page analysis is a stub for now - returns basic info */
+    MON_PHYSICAL_SCAN_RESULT_PUBLIC* pubOut = (MON_PHYSICAL_SCAN_RESULT_PUBLIC*)Out;
+    RtlZeroMemory(pubOut, sizeof(*pubOut));
+    pubOut->Size = sizeof(MON_PHYSICAL_SCAN_RESULT_PUBLIC);
+    pubOut->ProcessId = processId;
+
+    /* TODO: Implement physical page walking in Phase 8.2 */
+
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlMemGetSharing
+ * @purpose    Detect cross-process memory sharing
+ */
+static NTSTATUS MonIoctlMemGetSharing(PVOID In, ULONG InLen, PVOID Out, ULONG OutLen, ULONG* BytesOut)
+{
+    ULONG processId;
+
+    *BytesOut = 0;
+
+    if (In == NULL || InLen < sizeof(ULONG)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (Out == NULL || OutLen < sizeof(MON_SHARING_SCAN_RESULT_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    if (!MonMemIsInitialized()) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    processId = *(PULONG)In;
+
+    /* Sharing detection is a stub for now - returns basic info */
+    MON_SHARING_SCAN_RESULT_PUBLIC* pubOut = (MON_SHARING_SCAN_RESULT_PUBLIC*)Out;
+    RtlZeroMemory(pubOut, sizeof(*pubOut));
+    pubOut->Size = sizeof(MON_SHARING_SCAN_RESULT_PUBLIC);
+    pubOut->ProcessId = processId;
+    pubOut->SharedRegionCount = 0;
+    pubOut->SuspiciousShareCount = 0;
+    pubOut->TotalSharedBytes = 0;
+    pubOut->CrossProcessShareCount = 0;
+
+    /* TODO: Implement sharing detection in Phase 8.3 */
+
+    *BytesOut = sizeof(MON_SHARING_SCAN_RESULT_PUBLIC);
+    return STATUS_SUCCESS;
+}
+
+/**
+ * @function   MonIoctlMemGetStats
+ * @purpose    Get memory monitoring statistics
+ */
+static NTSTATUS MonIoctlMemGetStats(PVOID Out, ULONG OutLen)
+{
+    MON_MEM_STATS internalStats;
+
+    if (Out == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (OutLen < sizeof(MON_MEM_STATS_PUBLIC)) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    MonMemGetStats(&internalStats);
+
+    /* Map to public structure */
+    MON_MEM_STATS_PUBLIC* pubOut = (MON_MEM_STATS_PUBLIC*)Out;
+    pubOut->Size = sizeof(MON_MEM_STATS_PUBLIC);
+    pubOut->Reserved = 0;
+    pubOut->VadScansPerformed = internalStats.VadScansPerformed;
+    pubOut->MdlScansPerformed = internalStats.MdlScansPerformed;
+    pubOut->PhysicalScansPerformed = internalStats.PhysicalScansPerformed;
+    pubOut->SharingScansPerformed = internalStats.SharingScansPerformed;
+    pubOut->TotalAnomaliesDetected = internalStats.TotalAnomaliesDetected;
+    pubOut->TrackedMdlCount = internalStats.TrackedMdlCount;
+    pubOut->TrackedProcessCount = internalStats.TrackedProcessCount;
+    pubOut->TotalBytesScanned = internalStats.TotalBytesScanned;
+    pubOut->AverageVadScanTimeUs = internalStats.AverageVadScanTimeUs;
+    pubOut->PeakVadScanTimeUs = internalStats.PeakVadScanTimeUs;
+
+    for (ULONG i = 0; i < 16 && i < MonMemAnomaly_Max; i++) {
+        pubOut->AnomaliesByType[i] = internalStats.AnomaliesByType[i];
+    }
+
     return STATUS_SUCCESS;
 }
 
