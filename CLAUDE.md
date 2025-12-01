@@ -216,60 +216,67 @@ Based on CERT C Secure Coding Standard with security-critical emphasis.
 
 ```
 d:\Xploit\
-├── Win11MonitorMgr/              # Visual Studio solution
+├── src/
+│   ├── core/                         # Core driver module
+│   │   ├── win11_monitor_mgr.c       # Main driver entry, IOCTL dispatch (~1700 lines)
+│   │   ├── win11_monitor_mgr.h       # Driver context structures
+│   │   ├── monitor_internal.h        # Kernel-only internal structures
+│   │   └── telemetry.c               # Core event logging
+│   │
+│   ├── detection/                    # Detection subsystems
+│   │   ├── pool_tracker.c            # Pool allocation scanning
+│   │   ├── iop_mc.h                  # IOP_MC buffer entry structures
+│   │   ├── iop_mc_layout.h           # IOP_MC layout definitions
+│   │   ├── ioring_enum.c/h           # IoRing handle enumeration (A1)
+│   │   ├── regbuf_integrity.c/h      # RegisteredBuffers validation (A2)
+│   │   ├── ioring_intercept.c/h      # Pre-submit SQE validation (Phase 6)
+│   │   ├── cross_process.c/h         # Cross-process detection (Phase 9)
+│   │   └── handle_correlator.c       # Handle enumeration, hash table grouping
+│   │
+│   ├── profiling/                    # Behavioral analysis
+│   │   ├── process_profile.c/h       # Profile lifecycle, sliding window ops/sec
+│   │   └── anomaly_rules.c/h         # 7 built-in rules, MITRE ATT&CK mapping
+│   │
+│   ├── memory/                       # Memory monitoring (Phase 8)
+│   │   ├── mem_monitor.c/h           # MDL tracking, memory anomaly detection
+│   │   └── vad_walker.c              # VAD tree traversal, runtime offset resolution
+│   │
+│   ├── telemetry/                    # Telemetry subsystems
+│   │   ├── telemetry_etw.c/h         # ETW TraceLogging provider (B1)
+│   │   └── telemetry_ringbuf.c/h     # Lock-free ring buffer (E1)
+│   │
+│   └── util/                         # Utility modules
+│       ├── addr_mask.c/h             # Kernel address masking (B2)
+│       ├── offset_resolver.c/h       # Runtime offset detection (C1)
+│       └── rate_limit.c              # Per-process rate limiting (B3)
+│
+├── include/                          # Public API headers
+│   └── win11_monitor_public.h        # Public IOCTL contracts (~600 lines)
+│
+├── tests/                            # Unit tests
+│   ├── test_harness.c                # In-kernel test framework
+│   ├── test_intercept.c              # Phase 6 unit tests
+│   ├── test_profile.c                # Phase 7 unit tests
+│   ├── test_memory.c                 # Phase 8 unit tests
+│   └── test_xprocess.c               # Phase 9 unit tests
+│
+├── client/                           # User-mode client library
+│   ├── win11mon_client.c/h           # Base client API
+│   ├── win11mon_intercept.c/h        # IAT hooks for NtSubmitIoRing
+│   ├── win11mon_profile.c/h          # Profile/anomaly client APIs
+│   ├── win11mon_memory.c/h           # Memory monitoring client APIs
+│   └── win11mon_xprocess.c/h         # Cross-process detection client APIs
+│
+├── Win11MonitorMgr/                  # Visual Studio project
 │   └── Win11MonitorMgr.vcxproj
-├── win11_monitor_mgr.c           # Core driver (~1700 lines)
-├── win11_monitor_mgr.h           # Driver context structures
-├── win11_monitor_public.h        # Public IOCTL contracts (~600 lines)
-├── monitor_internal.h            # Kernel-only internal structures
 │
-├── # Phase 1-5: Core Infrastructure
-├── pool_tracker.c                # Pool allocation scanning
-├── iop_mc.c/h                    # IOP_MC buffer entry parser
-├── telemetry.c                   # Core event logging
-├── telemetry_etw.c/h             # ETW TraceLogging provider (B1)
-├── telemetry_ringbuf.c/h         # Lock-free ring buffer (E1)
-├── rate_limit.c                  # Per-process rate limiting (B3)
-├── addr_mask.c/h                 # Kernel address masking (B2)
-├── offset_resolver.c/h           # Runtime offset detection (C1)
+├── tools/                            # Build tools
+│   └── layout_gen/                   # Structure layout generator
 │
-├── # Phase 6: IoRing Interception
-├── ioring_intercept.c/h          # Pre-submit SQE validation engine
-├── ioring_enum.c/h               # IoRing handle enumeration (A1)
-├── regbuf_integrity.c/h          # RegisteredBuffers validation (A2)
-│
-├── # Phase 7: Process Profiling
-├── process_profile.c/h           # Profile lifecycle, sliding window ops/sec
-├── anomaly_rules.c/h             # 7 built-in rules, MITRE ATT&CK mapping
-│
-├── # Phase 8: Memory Monitoring
-├── mem_monitor.c/h               # MDL tracking, memory anomaly detection
-├── vad_walker.c                  # VAD tree traversal, runtime offset resolution
-│
-├── # Phase 9: Cross-Process Detection
-├── cross_process.c/h             # Subsystem lifecycle, risk scoring, alerts
-├── handle_correlator.c           # Handle enumeration, hash table grouping
-│
-├── test_harness.c                # In-kernel test framework
-├── test_profile.c                # Phase 7 unit tests
-├── test_intercept.c              # Phase 6 unit tests
-├── test_memory.c                 # Phase 8 unit tests
-├── test_xprocess.c               # Phase 9 unit tests
-│
-├── client/                       # User-mode client library
-│   ├── win11mon_client.c/h       # Base client API
-│   ├── win11mon_intercept.c/h    # IAT hooks for NtSubmitIoRing
-│   ├── win11mon_profile.c/h      # Profile/anomaly client APIs
-│   ├── win11mon_memory.c/h       # Memory monitoring client APIs
-│   └── win11mon_xprocess.c/h     # Cross-process detection client APIs
-│
-├── tools/
-│   └── layout_gen/               # Structure layout generator
-│
-└── docs/
-    ├── ziX-labs-c-style.md       # Coding standards
+└── docs/                             # Documentation
+    ├── ziX-labs-c-style.md           # Coding standards
     ├── enhancement_plan_v2_full_spec.md
-    └── PLAN_phase*.md            # Phase implementation plans
+    └── PLAN_phase*.md                # Phase implementation plans
 ```
 
 ## Build Commands

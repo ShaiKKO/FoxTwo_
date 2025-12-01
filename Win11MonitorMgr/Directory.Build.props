@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <!-- Workaround for VS 18 Insiders which uses v145 instead of v143 -->
+  <PropertyGroup>
+    <V142PropsFile Condition="!Exists('$(VCTargetsPath)\Platforms\$(Platform)\PlatformToolsets\v142\Toolset.props') AND Exists('$(VCTargetsPath)\Platforms\$(Platform)\PlatformToolsets\v145\Toolset.props')">$(VCTargetsPath)\Platforms\$(Platform)\PlatformToolsets\v145\Toolset.props</V142PropsFile>
+    <V143PropsFile Condition="!Exists('$(VCTargetsPath)\Platforms\$(Platform)\PlatformToolsets\v143\Toolset.props') AND Exists('$(VCTargetsPath)\Platforms\$(Platform)\PlatformToolsets\v145\Toolset.props')">$(VCTargetsPath)\Platforms\$(Platform)\PlatformToolsets\v145\Toolset.props</V143PropsFile>
+  </PropertyGroup>
+</Project>

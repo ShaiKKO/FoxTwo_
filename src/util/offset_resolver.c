@@ -1,5 +1,5 @@
 /*
- * Dynamic Offset Resolution Module - Implementation
+ * Dynamic Offset Resolution Module
  *
  * Author: Colin MacRitchie
  * Organization: ziX Performance Labs
@@ -279,7 +279,7 @@ static NTSTATUS MonOffsetResolveIoRingInferred(
 }
 
 /*--------------------------------------------------------------------------
- * Public API Implementation
+ * Public API
  *-------------------------------------------------------------------------*/
 
 _Use_decl_annotations_

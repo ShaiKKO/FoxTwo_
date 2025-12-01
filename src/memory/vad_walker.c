@@ -1,5 +1,5 @@
 /*
- * VAD Tree Walker - Implementation
+ * VAD Tree Walker
  *
  * Author: Colin MacRitchie
  * Organization: ziX Labs - Security Research Division

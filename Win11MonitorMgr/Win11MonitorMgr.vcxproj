@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{6B0A6E7E-5D0C-4D4D-9B5E-1F9B9E2A0C3F}</ProjectGuid>
+    <Keyword>Driver</Keyword>
+    <RootNamespace>Win11MonitorMgr</RootNamespace>
+    <TargetVersion>Windows10</TargetVersion>
+    <DriverType>WDM</DriverType>
+    <ProjectName>Win11MonitorMgr</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <DriverTargetPlatform>Desktop</DriverTargetPlatform>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <DriverTargetPlatform>Desktop</DriverTargetPlatform>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <WDKContentRoot Condition="'$(WDKContentRoot)' == ''">$(Registry:HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots@KitsRoot10)</WDKContentRoot>
+    <WDKContentRoot Condition="'$(WDKContentRoot)' == ''">$(Registry:HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows Kits\Installed Roots@KitsRoot10)</WDKContentRoot>
+    <WDKContentRoot Condition="'$(WDKContentRoot)'!='' AND !HasTrailingSlash('$(WDKContentRoot)')">$(WDKContentRoot)\</WDKContentRoot>
+    <WindowsTargetPlatformVersion Condition="'$(WindowsTargetPlatformVersion)' == ''">10.0.22621.0</WindowsTargetPlatformVersion>
+    <WDKBuildFolder>$(WindowsTargetPlatformVersion)</WDKBuildFolder>
+    <Driver_SpectreMitigation Condition="'$(Driver_SpectreMitigation)' == ''">Spectre</Driver_SpectreMitigation>
+    <SpectreMitigation>$(Driver_SpectreMitigation)</SpectreMitigation>
+  </PropertyGroup>
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <TargetName>win11_monitor_mgr</TargetName>
+    <TargetExt>.sys</TargetExt>
+    <OutDir>$(SolutionDir)x64\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\src\core;$(ProjectDir)..\src\detection;$(ProjectDir)..\src\profiling;$(ProjectDir)..\src\memory;$(ProjectDir)..\src\telemetry;$(ProjectDir)..\src\util;$(ProjectDir)..\include;$(ProjectDir)..\tests;$(WDKContentRoot)Include\$(WindowsTargetPlatformVersion)\km;$(WDKContentRoot)Include\$(WindowsTargetPlatformVersion)\shared;$(WDKContentRoot)Include\$(WindowsTargetPlatformVersion)\crt;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_KERNEL_MODE;WIN32_LEAN_AND_MEAN;_UNICODE;UNICODE;_AMD64_;AMD64;_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>true</SDLCheck>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <CompileAs>CompileAsC</CompileAs>
+      <ExceptionHandling>false</ExceptionHandling>
+      <AdditionalOptions>/kernel %(AdditionalOptions)</AdditionalOptions>
+      <TreatWarningAsError>false</TreatWarningAsError>
+    </ClCompile>
+    <Link>
+      <SubSystem>Native</SubSystem>
+      <AdditionalDependencies>ntoskrnl.lib;wdmsec.lib;BufferOverflowK.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(WindowsSdkDir)Lib\$(WindowsTargetPlatformVersion)\km\$(Platform);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <EntryPointSymbol>DriverEntry</EntryPointSymbol>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <Driver>Driver</Driver>
+    </Link>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)scripts\GenMcLayout.ps1" -PdbPath "$(ProjectDir)..\symbols\ntkrnlmp.pdb" -EraName "WIN11_ERA_226XX"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)scripts\DumpCAsserts.ps1" -SrcRoot "$(ProjectDir)..\" -OutDir "$(OutDir)"</Command>
+    </PreBuildEvent>
+    <DriverSign>
+      <FileDigestAlgorithm>SHA256</FileDigestAlgorithm>
+    </DriverSign>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\src\core;$(ProjectDir)..\src\detection;$(ProjectDir)..\src\profiling;$(ProjectDir)..\src\memory;$(ProjectDir)..\src\telemetry;$(ProjectDir)..\src\util;$(ProjectDir)..\include;$(ProjectDir)..\tests;$(WDKContentRoot)Include\$(WindowsTargetPlatformVersion)\km;$(WDKContentRoot)Include\$(WindowsTargetPlatformVersion)\shared;$(WDKContentRoot)Include\$(WindowsTargetPlatformVersion)\crt;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_KERNEL_MODE;WIN32_LEAN_AND_MEAN;_UNICODE;UNICODE;NDEBUG;_AMD64_;AMD64;_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>true</SDLCheck>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <CompileAs>CompileAsC</CompileAs>
+      <ExceptionHandling>false</ExceptionHandling>
+      <AdditionalOptions>/kernel %(AdditionalOptions)</AdditionalOptions>
+      <TreatWarningAsError>false</TreatWarningAsError>
+    </ClCompile>
+    <Link>
+      <SubSystem>Native</SubSystem>
+      <AdditionalDependencies>ntoskrnl.lib;wdmsec.lib;BufferOverflowK.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(WindowsSdkDir)Lib\$(WindowsTargetPlatformVersion)\km\$(Platform);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <EntryPointSymbol>DriverEntry</EntryPointSymbol>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <Driver>Driver</Driver>
+    </Link>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)scripts\GenMcLayout.ps1" -PdbPath "$(ProjectDir)..\symbols\ntkrnlmp.pdb" -EraName "WIN11_ERA_226XX"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)scripts\DumpCAsserts.ps1" -SrcRoot "$(ProjectDir)..\" -OutDir "$(OutDir)"</Command>
+    </PreBuildEvent>
+    <DriverSign>
+      <FileDigestAlgorithm>SHA256</FileDigestAlgorithm>
+    </DriverSign>
+  </ItemDefinitionGroup>
+  <!-- Core driver sources -->
+  <ItemGroup>
+    <ClCompile Include="..\src\core\win11_monitor_mgr.c" />
+    <ClCompile Include="..\src\core\telemetry.c" />
+  </ItemGroup>
+  <!-- Detection subsystem sources -->
+  <ItemGroup>
+    <ClCompile Include="..\src\detection\pool_tracker.c" />
+    <ClCompile Include="..\src\detection\ioring_enum.c" />
+    <ClCompile Include="..\src\detection\regbuf_integrity.c" />
+    <ClCompile Include="..\src\detection\ioring_intercept.c" />
+    <ClCompile Include="..\src\detection\cross_process.c" />
+    <ClCompile Include="..\src\detection\handle_correlator.c" />
+  </ItemGroup>
+  <!-- Profiling subsystem sources -->
+  <ItemGroup>
+    <ClCompile Include="..\src\profiling\process_profile.c" />
+    <ClCompile Include="..\src\profiling\anomaly_rules.c" />
+  </ItemGroup>
+  <!-- Memory monitoring sources -->
+  <ItemGroup>
+    <ClCompile Include="..\src\memory\mem_monitor.c" />
+    <ClCompile Include="..\src\memory\vad_walker.c" />
+  </ItemGroup>
+  <!-- Telemetry sources -->
+  <ItemGroup>
+    <ClCompile Include="..\src\telemetry\telemetry_etw.c" />
+    <ClCompile Include="..\src\telemetry\telemetry_ringbuf.c" />
+  </ItemGroup>
+  <!-- Utility sources -->
+  <ItemGroup>
+    <ClCompile Include="..\src\util\addr_mask.c" />
+    <ClCompile Include="..\src\util\offset_resolver.c" />
+    <ClCompile Include="..\src\util\rate_limit.c" />
+  </ItemGroup>
+  <!-- Test sources -->
+  <ItemGroup>
+    <ClCompile Include="..\tests\test_harness.c" />
+    <ClCompile Include="..\tests\test_intercept.c" />
+    <ClCompile Include="..\tests\test_profile.c" />
+    <ClCompile Include="..\tests\test_memory.c" />
+    <ClCompile Include="..\tests\test_xprocess.c" />
+  </ItemGroup>
+  <!-- Header files -->
+  <ItemGroup>
+    <ClInclude Include="..\src\core\win11_monitor_mgr.h" />
+    <ClInclude Include="..\src\core\monitor_internal.h" />
+    <ClInclude Include="..\src\detection\iop_mc.h" />
+    <ClInclude Include="..\src\detection\iop_mc_layout.h" />
+    <ClInclude Include="..\src\detection\ioring_enum.h" />
+    <ClInclude Include="..\src\detection\regbuf_integrity.h" />
+    <ClInclude Include="..\src\detection\ioring_intercept.h" />
+    <ClInclude Include="..\src\detection\cross_process.h" />
+    <ClInclude Include="..\src\profiling\process_profile.h" />
+    <ClInclude Include="..\src\profiling\anomaly_rules.h" />
+    <ClInclude Include="..\src\memory\mem_monitor.h" />
+    <ClInclude Include="..\src\telemetry\telemetry_etw.h" />
+    <ClInclude Include="..\src\telemetry\telemetry_ringbuf.h" />
+    <ClInclude Include="..\src\util\addr_mask.h" />
+    <ClInclude Include="..\src\util\offset_resolver.h" />
+    <ClInclude Include="..\include\win11_monitor_public.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
