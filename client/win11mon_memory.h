@@ -34,9 +34,9 @@ extern "C" {
 /*--------------------------------------------------------------------------
  * Memory Monitoring Constants
  *-------------------------------------------------------------------------*/
-#define WIN11MON_MEM_MAX_VADS 256
-#define WIN11MON_MEM_MAX_MDLS 128
-#define WIN11MON_MEM_MAX_SHARED 64
+#define WIN11MON_MEM_MAX_VADS           256
+#define WIN11MON_MEM_MAX_MDLS           128
+#define WIN11MON_MEM_MAX_SHARED         64
 #define WIN11MON_MEM_ANOMALY_TYPE_COUNT 16
 
 /*--------------------------------------------------------------------------
@@ -269,9 +269,8 @@ Win11MonMemScanVad(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
 DWORD
 WINAPI
 Win11MonMemScanVadDetailed(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
-                           _Out_writes_bytes_to_(BufferSize, *pBytesWritten)
-                               PVOID pBuffer,
-                           _In_ DWORD BufferSize, _Out_ DWORD* pBytesWritten);
+                           _Out_writes_bytes_to_(BufferSize, *pBytesWritten) PVOID pBuffer,
+                           _In_ DWORD BufferSize, _Out_ DWORD *pBytesWritten);
 
 /*==========================================================================
  * MDL Tracking APIs
@@ -295,9 +294,8 @@ Win11MonMemScanVadDetailed(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
 DWORD
 WINAPI
 Win11MonMemGetMdls(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
-                   _Out_writes_bytes_to_(BufferSize, *pBytesWritten)
-                       PVOID pBuffer,
-                   _In_ DWORD BufferSize, _Out_ DWORD* pBytesWritten);
+                   _Out_writes_bytes_to_(BufferSize, *pBytesWritten) PVOID pBuffer,
+                   _In_ DWORD BufferSize, _Out_ DWORD *pBytesWritten);
 
 /*==========================================================================
  * Physical Memory Analysis APIs
@@ -344,9 +342,8 @@ Win11MonMemScanPhysical(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
 DWORD
 WINAPI
 Win11MonMemGetSharing(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
-                      _Out_writes_bytes_to_(BufferSize, *pBytesWritten)
-                          PVOID pBuffer,
-                      _In_ DWORD BufferSize, _Out_ DWORD* pBytesWritten);
+                      _Out_writes_bytes_to_(BufferSize, *pBytesWritten) PVOID pBuffer,
+                      _In_ DWORD BufferSize, _Out_ DWORD *pBytesWritten);
 
 /*==========================================================================
  * Statistics APIs
@@ -378,8 +375,7 @@ Win11MonMemGetStats(_In_ HANDLE hDevice, _Out_ PWIN11MON_MEM_STATS pStats);
  * @param[in]  Anomaly - Anomaly type
  * @returns    Static string describing anomaly
  */
-const WCHAR* WINAPI
-Win11MonMemAnomalyToString(_In_ WIN11MON_MEM_ANOMALY Anomaly);
+const WCHAR *WINAPI Win11MonMemAnomalyToString(_In_ WIN11MON_MEM_ANOMALY Anomaly);
 
 /**
  * @function   Win11MonMemVadTypeToString
@@ -388,7 +384,7 @@ Win11MonMemAnomalyToString(_In_ WIN11MON_MEM_ANOMALY Anomaly);
  * @param[in]  VadType - VAD type
  * @returns    Static string describing VAD type
  */
-const WCHAR* WINAPI Win11MonMemVadTypeToString(_In_ WIN11MON_VAD_TYPE VadType);
+const WCHAR *WINAPI Win11MonMemVadTypeToString(_In_ WIN11MON_VAD_TYPE VadType);
 
 /**
  * @function   Win11MonMemProtectionToString
@@ -401,8 +397,7 @@ const WCHAR* WINAPI Win11MonMemVadTypeToString(_In_ WIN11MON_VAD_TYPE VadType);
  */
 DWORD
 WINAPI
-Win11MonMemProtectionToString(_In_ ULONG Protection,
-                              _Out_writes_z_(BufferSize) WCHAR* Buffer,
+Win11MonMemProtectionToString(_In_ ULONG Protection, _Out_writes_z_(BufferSize) WCHAR *Buffer,
                               _In_ DWORD BufferSize);
 
 #ifdef __cplusplus

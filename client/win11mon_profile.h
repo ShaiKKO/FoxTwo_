@@ -33,19 +33,19 @@ extern "C" {
 /*--------------------------------------------------------------------------
  * Profile Constants (mirror kernel definitions)
  *-------------------------------------------------------------------------*/
-#define WIN11MON_PROFILE_MAX_NAME 64
+#define WIN11MON_PROFILE_MAX_NAME   64
 #define WIN11MON_PROFILE_ML_VERSION 1
 
 /*--------------------------------------------------------------------------
  * Profile Flags
  *-------------------------------------------------------------------------*/
-#define WIN11MON_PROFILE_FLAG_ELEVATED 0x0001
-#define WIN11MON_PROFILE_FLAG_SERVICE 0x0002
+#define WIN11MON_PROFILE_FLAG_ELEVATED        0x0001
+#define WIN11MON_PROFILE_FLAG_SERVICE         0x0002
 #define WIN11MON_PROFILE_FLAG_NON_INTERACTIVE 0x0004
-#define WIN11MON_PROFILE_FLAG_SYSTEM 0x0008
-#define WIN11MON_PROFILE_FLAG_BLACKLISTED 0x0010
-#define WIN11MON_PROFILE_FLAG_WHITELISTED 0x0020
-#define WIN11MON_PROFILE_FLAG_EXPORTED 0x0040
+#define WIN11MON_PROFILE_FLAG_SYSTEM          0x0008
+#define WIN11MON_PROFILE_FLAG_BLACKLISTED     0x0010
+#define WIN11MON_PROFILE_FLAG_WHITELISTED     0x0020
+#define WIN11MON_PROFILE_FLAG_EXPORTED        0x0040
 
 /*--------------------------------------------------------------------------
  * Anomaly Rule IDs (mirror kernel definitions)
@@ -247,9 +247,8 @@ Win11MonProfileGet(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
 DWORD
 WINAPI
 Win11MonProfileList(_In_ HANDLE hDevice,
-                    _Out_writes_to_(MaxCount, *pActualCount)
-                        PWIN11MON_PROFILE_SUMMARY pBuffer,
-                    _In_ DWORD MaxCount, _Out_ DWORD* pActualCount);
+                    _Out_writes_to_(MaxCount, *pActualCount) PWIN11MON_PROFILE_SUMMARY pBuffer,
+                    _In_ DWORD MaxCount, _Out_ DWORD *pActualCount);
 
 /**
  * @function   Win11MonProfileExportML
@@ -282,8 +281,7 @@ Win11MonProfileExportML(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
  */
 DWORD
 WINAPI
-Win11MonProfileGetStats(_In_ HANDLE hDevice,
-                        _Out_ PWIN11MON_PROFILE_STATS pStats);
+Win11MonProfileGetStats(_In_ HANDLE hDevice, _Out_ PWIN11MON_PROFILE_STATS pStats);
 
 /*==========================================================================
  * Profile Configuration APIs
@@ -302,8 +300,7 @@ Win11MonProfileGetStats(_In_ HANDLE hDevice,
  */
 DWORD
 WINAPI
-Win11MonProfileGetConfig(_In_ HANDLE hDevice,
-                         _Out_ PWIN11MON_PROFILE_CONFIG pConfig);
+Win11MonProfileGetConfig(_In_ HANDLE hDevice, _Out_ PWIN11MON_PROFILE_CONFIG pConfig);
 
 /**
  * @function   Win11MonProfileSetConfig
@@ -318,8 +315,7 @@ Win11MonProfileGetConfig(_In_ HANDLE hDevice,
  */
 DWORD
 WINAPI
-Win11MonProfileSetConfig(_In_ HANDLE hDevice,
-                         _In_ const WIN11MON_PROFILE_CONFIG* pConfig);
+Win11MonProfileSetConfig(_In_ HANDLE hDevice, _In_ const WIN11MON_PROFILE_CONFIG *pConfig);
 
 /**
  * @function   Win11MonProfileReset
@@ -355,9 +351,8 @@ Win11MonProfileReset(_In_ HANDLE hDevice);
 DWORD
 WINAPI
 Win11MonAnomalyGetRules(_In_ HANDLE hDevice,
-                        _Out_writes_to_(MaxCount, *pActualCount)
-                            PWIN11MON_ANOMALY_RULE pBuffer,
-                        _In_ DWORD MaxCount, _Out_ DWORD* pActualCount);
+                        _Out_writes_to_(MaxCount, *pActualCount) PWIN11MON_ANOMALY_RULE pBuffer,
+                        _In_ DWORD MaxCount, _Out_ DWORD *pActualCount);
 
 /**
  * @function   Win11MonAnomalySetThreshold
@@ -374,8 +369,7 @@ Win11MonAnomalyGetRules(_In_ HANDLE hDevice,
  */
 DWORD
 WINAPI
-Win11MonAnomalySetThreshold(_In_ HANDLE hDevice,
-                            _In_ WIN11MON_ANOMALY_RULE_ID RuleId,
+Win11MonAnomalySetThreshold(_In_ HANDLE hDevice, _In_ WIN11MON_ANOMALY_RULE_ID RuleId,
                             _In_ DWORD Threshold);
 
 /**
@@ -393,8 +387,7 @@ Win11MonAnomalySetThreshold(_In_ HANDLE hDevice,
  */
 DWORD
 WINAPI
-Win11MonAnomalyEnableRule(_In_ HANDLE hDevice,
-                          _In_ WIN11MON_ANOMALY_RULE_ID RuleId,
+Win11MonAnomalyEnableRule(_In_ HANDLE hDevice, _In_ WIN11MON_ANOMALY_RULE_ID RuleId,
                           _In_ BOOL Enable);
 
 /**
@@ -410,8 +403,7 @@ Win11MonAnomalyEnableRule(_In_ HANDLE hDevice,
  */
 DWORD
 WINAPI
-Win11MonAnomalyGetStats(_In_ HANDLE hDevice,
-                        _Out_ PWIN11MON_ANOMALY_STATS pStats);
+Win11MonAnomalyGetStats(_In_ HANDLE hDevice, _Out_ PWIN11MON_ANOMALY_STATS pStats);
 
 /**
  * @function   Win11MonAnomalyResetStats

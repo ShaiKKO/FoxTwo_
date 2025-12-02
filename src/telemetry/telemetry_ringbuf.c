@@ -4,7 +4,7 @@
  * Author: Colin MacRitchie
  * Organization: ziX Performance Labs
  * File: telemetry_ringbuf.c
- * Version: 1.1
+ * Version: 2.0
  * Date: 2025-12-01
  * Copyright:
  *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and
@@ -13,28 +13,33 @@
  *
  * Summary
  * -------
- * Implements a fixed-size circular buffer for telemetry event storage.
+ * Implements a fixed-size circular buffer for telemetry event storage using
+ * a true lock-free write path based on the DPDK rte_ring algorithm.
  *
- * Architecture:
+ * Architecture (MPSC - Multi-Producer Single-Consumer):
  * - Single contiguous NonPaged allocation for cache efficiency
- * - Lock-free write path using InterlockedCompareExchange64
+ * - Lock-free multi-producer write path via CAS (InterlockedCompareExchange64)
+ * - WriteHead/WriteTail separation: head reserves space, tail commits data
  * - Spinlock-protected read path for multi-reader safety
  * - Automatic overwrite of oldest events when full
+ * - Cache-line aligned hot variables to prevent false sharing
+ *
+ * Lock-Free Write Algorithm:
+ * 1. CAS WriteHead to atomically reserve space
+ * 2. Copy event data to reserved region
+ * 3. Wait for previous writers to commit (WriteTail == our offset)
+ * 4. CAS WriteTail to commit our write
  *
  * Memory Layout:
  * +--------------------------------------------------+
  * |  Event 1  |  Event 2  |  ... Free ...  | Event N |
  * +--------------------------------------------------+
- *             ^WriteOffset              ^ReadOffset
+ *         ^ReadOffset      ^WriteTail     ^WriteHead
+ *         (consumer)       (committed)    (reserved)
  *
- * When WriteOffset catches up to ReadOffset, oldest events are overwritten.
- *
- * References:
- * - Microsoft ring buffer pattern:
- * https://github.com/microsoft/Windows-driver-samples/blob/main/serial/VirtualSerial2/ringbuffer.h
- * - Lock-free design: https://github.com/stuxnet147/Win-Kernel-Logger
- * - InterlockedCompareExchange64:
- * https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-interlockedcompareexchange64
+ * Uses 64-bit non-wrapping offsets to avoid ABA problem:
+ * - At 1M events/sec with 100B avg: ~10^15 years until wrap
+ * - Actual buffer position = offset % BufferSize
  */
 
 #include "telemetry_ringbuf.h"
@@ -48,6 +53,17 @@
 
 /*--------------------------------------------------------------------------
  * Internal Ring Buffer State
+ *
+ * Lock-Free Architecture (MPSC - Multi-Producer Single-Consumer):
+ * - WriteHead: Atomically incremented via CAS to reserve space
+ * - WriteTail: Updated after data copy to signal completion
+ * - ReadOffset: Protected by ReadLock for consumer
+ *
+ * Write Flow:
+ * 1. CAS WriteHead to reserve space
+ * 2. Copy data to reserved region
+ * 3. Spin until WriteTail == our slot (ordering)
+ * 4. Advance WriteTail
  *-------------------------------------------------------------------------*/
 
 typedef struct _MON_RING_BUFFER_STATE {
@@ -55,27 +71,26 @@ typedef struct _MON_RING_BUFFER_STATE {
   PUCHAR Base;      /* Buffer start */
   ULONG BufferSize; /* Total allocation size */
 
-  /* Write position (lock-free via interlocked) */
-  volatile LONG64 WriteOffset; /* Next write position */
+  /* Producer state (lock-free via CAS) - separate cache line */
+  DECLSPEC_ALIGN(64) volatile LONG64 WriteHead; /* Space reservation point */
+  volatile LONG64 WriteTail;                    /* Committed data point */
 
-  /* Read position (protected by ReadLock) */
-  volatile LONG64 ReadOffset; /* Consumer read position */
+  /* Consumer state (spinlock protected) - separate cache line */
+  DECLSPEC_ALIGN(64) volatile LONG64 ReadOffset; /* Consumer read position */
+  KSPIN_LOCK ReadLock;                           /* Multi-reader serialization */
 
-  /* Statistics (volatile atomics) */
-  volatile LONG EventCount;         /* Events currently in buffer */
-  volatile LONG SequenceNumber;     /* Next sequence number */
-  volatile LONG WrapCount;          /* Buffer wrap-around count */
-  volatile LONG TotalEventsWritten; /* Lifetime event count */
-  volatile LONG EventsOverwritten;  /* Events lost to overwrite */
-  volatile LONG EventsDropped;      /* Events dropped (too large) */
+  /* Statistics (atomic updates) - separate cache line */
+  DECLSPEC_ALIGN(64) volatile LONG EventCount; /* Events in buffer */
+  volatile LONG SequenceNumber;                /* Next sequence number */
+  volatile LONG WrapCount;                     /* Buffer wrap count */
+  volatile LONG TotalEventsWritten;            /* Lifetime event count */
+  volatile LONG EventsOverwritten;             /* Events overwritten */
+  volatile LONG EventsDropped;                 /* Events dropped */
+  volatile LONG CasRetryCount;                 /* CAS retry count */
 
   /* Timestamps (updated on write) */
   volatile LONG64 OldestTimestamp; /* Oldest event time */
   volatile LONG64 NewestTimestamp; /* Newest event time */
-
-  /* Synchronization */
-  KSPIN_LOCK ReadLock;  /* Multi-reader serialization */
-  KSPIN_LOCK WriteLock; /* Write serialization (simple approach) */
 
   /* Initialization flag */
   volatile BOOLEAN Initialized;
@@ -120,52 +135,66 @@ static FORCEINLINE ULONG MonRingGetEventSize(_In_ ULONG PayloadSize) {
 }
 
 /**
- * @function   MonRingGetFreeSpace
- * @purpose    Calculate available space in ring buffer
- * @note       Must be called with appropriate synchronization
+ * @function   MonRingGetFreeSpaceLockFree
+ * @purpose    Calculate available space using lock-free reads
+ * @note       Uses WriteTail (committed) not WriteHead (reserved)
  */
-static ULONG MonRingGetFreeSpace(VOID) {
-  LONG64 writeOffset = InterlockedCompareExchange64(&g_RingState.WriteOffset, 0, 0);
+static ULONG MonRingGetFreeSpaceLockFree(VOID) {
+  LONG64 writeTail = InterlockedCompareExchange64(&g_RingState.WriteTail, 0, 0);
   LONG64 readOffset = InterlockedCompareExchange64(&g_RingState.ReadOffset, 0, 0);
 
-  if (writeOffset >= readOffset) {
-    /* Write ahead of read: free = total - (write - read) */
-    return g_RingState.BufferSize - (ULONG)(writeOffset - readOffset);
+  /* Use modulo buffer size for both to handle wrap */
+  ULONG writePos = (ULONG)(writeTail % g_RingState.BufferSize);
+  ULONG readPos = (ULONG)(readOffset % g_RingState.BufferSize);
+
+  if (writeTail >= readOffset) {
+    /* Normal case: write ahead of read */
+    return g_RingState.BufferSize - (ULONG)(writeTail - readOffset);
   } else {
-    /* Read ahead of write (wrapped): free = read - write */
-    return (ULONG)(readOffset - writeOffset);
+    /* Should not happen with 64-bit counters, but handle gracefully */
+    return g_RingState.BufferSize - (ULONG)(readOffset - writeTail);
   }
 }
 
 /**
- * @function   MonRingGetUsedSpace
- * @purpose    Calculate used space in ring buffer
+ * @function   MonRingGetUsedSpaceLockFree
+ * @purpose    Calculate used space using lock-free reads
  */
-static ULONG MonRingGetUsedSpace(VOID) {
-  return g_RingState.BufferSize - MonRingGetFreeSpace();
+static ULONG MonRingGetUsedSpaceLockFree(VOID) {
+  LONG64 writeTail = InterlockedCompareExchange64(&g_RingState.WriteTail, 0, 0);
+  LONG64 readOffset = InterlockedCompareExchange64(&g_RingState.ReadOffset, 0, 0);
+  return (ULONG)(writeTail - readOffset);
 }
 
 /**
  * @function   MonRingAdvanceReadOffset
- * @purpose    Skip oldest event to make room for new event
- * @precondition Write lock held
+ * @purpose    Skip oldest events to make room for new event
+ * @precondition Called under ReadLock when overwrite needed
+ * @note       Uses WriteTail for committed boundary check
  */
 static VOID MonRingAdvanceReadOffset(_In_ ULONG BytesNeeded) {
   LONG64 readOffset = g_RingState.ReadOffset;
+  LONG64 writeTail = InterlockedCompareExchange64(&g_RingState.WriteTail, 0, 0);
   ULONG bytesFreed = 0;
 
-  while (bytesFreed < BytesNeeded && g_RingState.EventCount > 0) {
-    /* Read event header at current read position */
-    PMON_RING_EVENT_HEADER header =
-        (PMON_RING_EVENT_HEADER)(g_RingState.Base + (readOffset % g_RingState.BufferSize));
+  while (bytesFreed < BytesNeeded && readOffset < writeTail) {
+    ULONG bufferPos = (ULONG)(readOffset % g_RingState.BufferSize);
+    PMON_RING_EVENT_HEADER header = (PMON_RING_EVENT_HEADER)(g_RingState.Base + bufferPos);
+
+    /* Check for padding (zero magic means skip to buffer start) */
+    if (header->Magic == 0) {
+      /* This is padding - skip to buffer start */
+      readOffset = ((readOffset / g_RingState.BufferSize) + 1) * g_RingState.BufferSize;
+      continue;
+    }
 
     /* Validate magic */
     if (header->Magic != MON_RING_EVENT_MAGIC) {
-      /* Corruption detected - reset buffer */
+      /* Corruption detected - reset to WriteTail */
       DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
-                 "[WIN11MON][RING] Corruption detected at offset %lld, resetting\n", readOffset);
-      g_RingState.ReadOffset = g_RingState.WriteOffset;
-      g_RingState.EventCount = 0;
+                 "[WIN11MON][RING] Corruption at offset %lld, resetting\n", readOffset);
+      InterlockedExchange64(&g_RingState.ReadOffset, writeTail);
+      InterlockedExchange(&g_RingState.EventCount, 0);
       return;
     }
 
@@ -177,8 +206,106 @@ static VOID MonRingAdvanceReadOffset(_In_ ULONG BytesNeeded) {
     InterlockedIncrement(&g_RingState.EventsOverwritten);
   }
 
-  /* Update read offset */
-  g_RingState.ReadOffset = MonRingWrapOffset(readOffset, g_RingState.BufferSize);
+  /* Update read offset atomically */
+  InterlockedExchange64(&g_RingState.ReadOffset, readOffset);
+}
+
+/*--------------------------------------------------------------------------
+ * Lock-Free CAS Functions
+ *-------------------------------------------------------------------------*/
+
+/* Maximum CAS retries before giving up */
+#define MON_RING_MAX_CAS_RETRIES 1000
+
+/* Yield threshold for tail wait spin */
+#define MON_RING_TAIL_SPIN_YIELD 10000
+
+/**
+ * @function   MonRingReserveSpace
+ * @purpose    Atomically reserve space in ring buffer via CAS
+ * @precondition IRQL <= DISPATCH_LEVEL
+ * @postcondition Space reserved, ready for data copy
+ * @returns    Offset to write at, or -1 if cannot reserve
+ */
+static LONG64 MonRingReserveSpace(_In_ ULONG EventSize, _Out_ PULONG ActualSize,
+                                  _Out_ PBOOLEAN NeedsPadding, _Out_ PULONG PaddingSize) {
+  LONG64 localHead;
+  LONG64 newHead;
+  ULONG bufferOffset;
+  ULONG retryCount = 0;
+
+  *NeedsPadding = FALSE;
+  *PaddingSize = 0;
+  *ActualSize = EventSize;
+
+  do {
+    if (retryCount++ > MON_RING_MAX_CAS_RETRIES) {
+      /* Too much contention - drop event */
+      InterlockedIncrement(&g_RingState.EventsDropped);
+      return -1;
+    }
+
+    /* Read current head */
+    localHead = InterlockedCompareExchange64(&g_RingState.WriteHead, 0, 0);
+    bufferOffset = (ULONG)(localHead % g_RingState.BufferSize);
+
+    /* Check for wrap-around: event must fit contiguously */
+    if (bufferOffset + EventSize > g_RingState.BufferSize) {
+      /* Need padding to end of buffer, then event at start */
+      *PaddingSize = g_RingState.BufferSize - bufferOffset;
+      *ActualSize = *PaddingSize + EventSize;
+      *NeedsPadding = TRUE;
+      newHead = localHead + *ActualSize;
+    } else {
+      newHead = localHead + EventSize;
+    }
+
+    /* CAS to reserve space */
+  } while (InterlockedCompareExchange64(&g_RingState.WriteHead, newHead, localHead) != localHead);
+
+  /* Track CAS retries for performance monitoring */
+  if (retryCount > 1) {
+    InterlockedAdd(&g_RingState.CasRetryCount, (LONG)(retryCount - 1));
+  }
+
+  return localHead;
+}
+
+/**
+ * @function   MonRingCommitWrite
+ * @purpose    Commit write by advancing WriteTail (maintains ordering)
+ * @precondition Data has been copied to reserved space
+ * @postcondition WriteTail advanced, event visible to consumers
+ */
+static VOID MonRingCommitWrite(_In_ LONG64 MyOffset, _In_ ULONG TotalSize) {
+  ULONG spinCount = 0;
+
+  /*
+   * Wait for our turn to update tail (preserves event ordering)
+   * Previous writers must complete before we can advance tail
+   */
+  while (InterlockedCompareExchange64(&g_RingState.WriteTail, MyOffset + TotalSize, MyOffset) !=
+         MyOffset) {
+    /* Previous writer hasn't finished yet */
+    if (++spinCount > MON_RING_TAIL_SPIN_YIELD) {
+      /* Yield to prevent CPU starvation */
+      KeYieldProcessor();
+      spinCount = 0;
+    }
+  }
+}
+
+/**
+ * @function   MonRingWritePadding
+ * @purpose    Write padding marker at wrap boundary
+ */
+static VOID MonRingWritePadding(_In_ ULONG BufferOffset, _In_ ULONG PaddingSize) {
+  if (PaddingSize >= sizeof(MON_RING_EVENT_HEADER)) {
+    PMON_RING_EVENT_HEADER padding = (PMON_RING_EVENT_HEADER)(g_RingState.Base + BufferOffset);
+    padding->Magic = 0; /* Zero magic indicates padding */
+    padding->TotalSize = PaddingSize;
+  }
+  /* Small padding at end of buffer - just leave as-is */
 }
 
 /*--------------------------------------------------------------------------
@@ -221,7 +348,8 @@ _Use_decl_annotations_ NTSTATUS MonRingBufferInitialize(ULONG BufferSizeBytes) {
   RtlZeroMemory(&g_RingState, sizeof(g_RingState));
   g_RingState.Base = buffer;
   g_RingState.BufferSize = BufferSizeBytes;
-  g_RingState.WriteOffset = 0;
+  g_RingState.WriteHead = 0;
+  g_RingState.WriteTail = 0;
   g_RingState.ReadOffset = 0;
   g_RingState.EventCount = 0;
   g_RingState.SequenceNumber = 0;
@@ -229,12 +357,12 @@ _Use_decl_annotations_ NTSTATUS MonRingBufferInitialize(ULONG BufferSizeBytes) {
   g_RingState.TotalEventsWritten = 0;
   g_RingState.EventsOverwritten = 0;
   g_RingState.EventsDropped = 0;
+  g_RingState.CasRetryCount = 0;
   g_RingState.OldestTimestamp = 0;
   g_RingState.NewestTimestamp = 0;
 
-  /* Initialize spinlocks */
+  /* Initialize spinlock for reader */
   KeInitializeSpinLock(&g_RingState.ReadLock);
-  KeInitializeSpinLock(&g_RingState.WriteLock);
 
   /* Mark as initialized with release semantics */
   MonWriteBooleanRelease(&g_RingState.Initialized, TRUE);
@@ -271,14 +399,35 @@ _Use_decl_annotations_ BOOLEAN MonRingBufferIsInitialized(VOID) {
   return MonReadBooleanAcquire(&g_RingState.Initialized);
 }
 
+/**
+ * @function   MonRingBufferWrite
+ * @purpose    Write event to ring buffer using lock-free CAS algorithm
+ * @precondition IRQL <= DISPATCH_LEVEL; buffer initialized
+ * @postcondition Event stored; oldest events overwritten if buffer full
+ *
+ * Lock-Free Algorithm (DPDK rte_ring pattern):
+ * 1. CAS WriteHead to reserve space
+ * 2. Copy data to reserved region
+ * 3. Wait for turn to update WriteTail (ordering)
+ * 4. CAS WriteTail to commit write
+ */
 _Use_decl_annotations_ NTSTATUS MonRingBufferWrite(MONITOR_EVENT_TYPE EventType,
                                                    const VOID *Payload, ULONG PayloadSize) {
+  LONG64 reservedOffset;
+  ULONG eventSize;
+  ULONG actualSize;
+  ULONG paddingSize;
+  ULONG bufferOffset;
+  BOOLEAN needsPadding;
+  PMON_RING_EVENT_HEADER header;
+  LARGE_INTEGER timestamp;
+
   if (!MonReadBooleanAcquire(&g_RingState.Initialized)) {
     return STATUS_NOT_SUPPORTED;
   }
 
-  /* Calculate total event size */
-  ULONG eventSize = MonRingGetEventSize(PayloadSize);
+  /* Calculate total event size (header + payload, aligned) */
+  eventSize = MonRingGetEventSize(PayloadSize);
 
   /* Reject events larger than maximum */
   if (eventSize > MON_RING_MAX_EVENT_SIZE) {
@@ -292,46 +441,41 @@ _Use_decl_annotations_ NTSTATUS MonRingBufferWrite(MONITOR_EVENT_TYPE EventType,
     return STATUS_BUFFER_OVERFLOW;
   }
 
-  KIRQL oldIrql;
-  KeAcquireSpinLock(&g_RingState.WriteLock, &oldIrql);
-
-  /* Check if we need to make room */
-  ULONG freeSpace = MonRingGetFreeSpace();
-  if (freeSpace < eventSize) {
-    /* Overwrite oldest events to make room */
-    MonRingAdvanceReadOffset(eventSize - freeSpace + 1);
+  /* Check if we need to make room (overwrite oldest events) */
+  if (MonRingGetUsedSpaceLockFree() + eventSize > g_RingState.BufferSize) {
+    /* Need to advance read offset - requires ReadLock */
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&g_RingState.ReadLock, &oldIrql);
+    MonRingAdvanceReadOffset(eventSize);
+    KeReleaseSpinLock(&g_RingState.ReadLock, oldIrql);
   }
 
-  /* Get write position */
-  LONG64 writeOffset = g_RingState.WriteOffset;
-  ULONG bufferOffset = (ULONG)(writeOffset % g_RingState.BufferSize);
+  /* Reserve space via CAS (lock-free) */
+  reservedOffset = MonRingReserveSpace(eventSize, &actualSize, &needsPadding, &paddingSize);
+  if (reservedOffset < 0) {
+    /* CAS failed too many times - event dropped (counter already incremented) */
+    return STATUS_DEVICE_BUSY;
+  }
 
-  /* Check for wrap-around within event (need contiguous write) */
-  if (bufferOffset + eventSize > g_RingState.BufferSize) {
-    /*
-     * Event would span wrap boundary - advance to start of buffer.
-     * Mark remaining space as padding (zero magic).
-     */
-    if (bufferOffset < g_RingState.BufferSize) {
-      PMON_RING_EVENT_HEADER padding = (PMON_RING_EVENT_HEADER)(g_RingState.Base + bufferOffset);
-      padding->Magic = 0; /* Invalid magic marks padding */
-      padding->TotalSize = g_RingState.BufferSize - bufferOffset;
-    }
+  /* Calculate buffer position for this write */
+  bufferOffset = (ULONG)(reservedOffset % g_RingState.BufferSize);
 
-    writeOffset = MonRingWrapOffset(writeOffset + (g_RingState.BufferSize - bufferOffset),
-                                    g_RingState.BufferSize);
-    bufferOffset = 0;
+  /* Handle wrap-around: write padding marker if needed */
+  if (needsPadding) {
+    MonRingWritePadding(bufferOffset, paddingSize);
+    bufferOffset = 0; /* Event goes at start of buffer */
     InterlockedIncrement(&g_RingState.WrapCount);
   }
 
   /* Write event header */
-  PMON_RING_EVENT_HEADER header = (PMON_RING_EVENT_HEADER)(g_RingState.Base + bufferOffset);
+  header = (PMON_RING_EVENT_HEADER)(g_RingState.Base + bufferOffset);
 
   header->Magic = MON_RING_EVENT_MAGIC;
   header->TotalSize = eventSize;
   header->PayloadSize = PayloadSize;
   header->EventType = EventType;
-  KeQuerySystemTime(&header->Timestamp);
+  KeQuerySystemTime(&timestamp);
+  header->Timestamp = timestamp;
   header->ProcessId = HandleToUlong(PsGetCurrentProcessId());
   header->ThreadId = HandleToUlong(PsGetCurrentThreadId());
   header->SequenceNumber = InterlockedIncrement(&g_RingState.SequenceNumber);
@@ -342,20 +486,18 @@ _Use_decl_annotations_ NTSTATUS MonRingBufferWrite(MONITOR_EVENT_TYPE EventType,
     RtlCopyMemory((PUCHAR)header + sizeof(MON_RING_EVENT_HEADER), Payload, PayloadSize);
   }
 
-  /* Update timestamps */
-  InterlockedExchange64(&g_RingState.NewestTimestamp, header->Timestamp.QuadPart);
-  if (g_RingState.EventCount == 0) {
-    InterlockedExchange64(&g_RingState.OldestTimestamp, header->Timestamp.QuadPart);
-  }
+  /* Commit write by advancing WriteTail (preserves ordering) */
+  MonRingCommitWrite(reservedOffset, actualSize);
 
-  /* Advance write offset */
-  g_RingState.WriteOffset = MonRingWrapOffset(writeOffset + eventSize, g_RingState.BufferSize);
+  /* Update timestamps atomically */
+  InterlockedExchange64(&g_RingState.NewestTimestamp, timestamp.QuadPart);
+  if (InterlockedCompareExchange(&g_RingState.EventCount, 0, 0) == 0) {
+    InterlockedExchange64(&g_RingState.OldestTimestamp, timestamp.QuadPart);
+  }
 
   /* Update counters */
   InterlockedIncrement(&g_RingState.EventCount);
   InterlockedIncrement(&g_RingState.TotalEventsWritten);
-
-  KeReleaseSpinLock(&g_RingState.WriteLock, oldIrql);
 
   return STATUS_SUCCESS;
 }
@@ -380,17 +522,23 @@ _Use_decl_annotations_ NTSTATUS MonRingBufferRead(PVOID OutputBuffer, ULONG Buff
   ULONG bytesWritten = 0;
   ULONG eventsRead = 0;
   LONG64 readOffset = g_RingState.ReadOffset;
-  LONG64 writeOffset = g_RingState.WriteOffset;
+  LONG64 writeTail = InterlockedCompareExchange64(&g_RingState.WriteTail, 0, 0);
 
-  while (readOffset != writeOffset && bytesWritten < BufferSize) {
+  while (readOffset < writeTail && bytesWritten < BufferSize) {
     ULONG bufferOffset = (ULONG)(readOffset % g_RingState.BufferSize);
     PMON_RING_EVENT_HEADER header = (PMON_RING_EVENT_HEADER)(g_RingState.Base + bufferOffset);
 
-    /* Check for padding (invalid magic) */
-    if (header->Magic != MON_RING_EVENT_MAGIC) {
-      /* Skip padding and wrap to start */
-      readOffset = 0;
+    /* Check for padding (zero magic indicates wrap padding) */
+    if (header->Magic == 0) {
+      /* Skip padding - advance to next buffer boundary */
+      readOffset = ((readOffset / g_RingState.BufferSize) + 1) * g_RingState.BufferSize;
       continue;
+    }
+
+    /* Validate magic */
+    if (header->Magic != MON_RING_EVENT_MAGIC) {
+      /* Corruption - stop reading */
+      break;
     }
 
     /* Check if event fits in remaining output buffer */
@@ -403,12 +551,12 @@ _Use_decl_annotations_ NTSTATUS MonRingBufferRead(PVOID OutputBuffer, ULONG Buff
 
     bytesWritten += header->TotalSize;
     eventsRead++;
-    readOffset = MonRingWrapOffset(readOffset + header->TotalSize, g_RingState.BufferSize);
+    readOffset += header->TotalSize;
     InterlockedDecrement(&g_RingState.EventCount);
   }
 
-  /* Update read offset */
-  g_RingState.ReadOffset = readOffset;
+  /* Update read offset atomically */
+  InterlockedExchange64(&g_RingState.ReadOffset, readOffset);
 
   /* Update oldest timestamp if we have remaining events */
   if (g_RingState.EventCount > 0) {
@@ -458,17 +606,24 @@ _Use_decl_annotations_ NTSTATUS MonRingBufferSnapshot(PVOID OutputBuffer, ULONG 
   ULONG bytesWritten = sizeof(MON_RING_SNAPSHOT_HEADER);
   ULONG eventsWritten = 0;
   LONG64 readOffset = g_RingState.ReadOffset;
-  LONG64 writeOffset = g_RingState.WriteOffset;
+  LONG64 writeTail = InterlockedCompareExchange64(&g_RingState.WriteTail, 0, 0);
   BOOLEAN firstEvent = TRUE;
 
-  while (readOffset != writeOffset && outputRemaining > 0) {
+  while (readOffset < writeTail && outputRemaining > 0) {
     ULONG bufferOffset = (ULONG)(readOffset % g_RingState.BufferSize);
     PMON_RING_EVENT_HEADER header = (PMON_RING_EVENT_HEADER)(g_RingState.Base + bufferOffset);
 
-    /* Check for padding */
-    if (header->Magic != MON_RING_EVENT_MAGIC) {
-      readOffset = 0;
+    /* Check for padding (zero magic indicates wrap padding) */
+    if (header->Magic == 0) {
+      /* Skip padding - advance to next buffer boundary */
+      readOffset = ((readOffset / g_RingState.BufferSize) + 1) * g_RingState.BufferSize;
       continue;
+    }
+
+    /* Validate magic */
+    if (header->Magic != MON_RING_EVENT_MAGIC) {
+      /* Corruption - stop reading */
+      break;
     }
 
     /* Check if event fits */
@@ -492,7 +647,7 @@ _Use_decl_annotations_ NTSTATUS MonRingBufferSnapshot(PVOID OutputBuffer, ULONG 
     outputRemaining -= header->TotalSize;
     bytesWritten += header->TotalSize;
     eventsWritten++;
-    readOffset = MonRingWrapOffset(readOffset + header->TotalSize, g_RingState.BufferSize);
+    readOffset += header->TotalSize;
   }
 
   snapshotHeader->EventCount = eventsWritten;
@@ -514,13 +669,14 @@ _Use_decl_annotations_ VOID MonRingBufferGetStats(PMON_RING_BUFFER_STATS Stats) 
   }
 
   Stats->BufferSizeBytes = g_RingState.BufferSize;
-  Stats->UsedBytes = MonRingGetUsedSpace();
-  Stats->FreeBytes = MonRingGetFreeSpace();
+  Stats->UsedBytes = MonRingGetUsedSpaceLockFree();
+  Stats->FreeBytes = MonRingGetFreeSpaceLockFree();
   Stats->EventCount = InterlockedCompareExchange(&g_RingState.EventCount, 0, 0);
   Stats->TotalEventsWritten = InterlockedCompareExchange(&g_RingState.TotalEventsWritten, 0, 0);
   Stats->EventsOverwritten = InterlockedCompareExchange(&g_RingState.EventsOverwritten, 0, 0);
   Stats->EventsDropped = InterlockedCompareExchange(&g_RingState.EventsDropped, 0, 0);
   Stats->WrapCount = InterlockedCompareExchange(&g_RingState.WrapCount, 0, 0);
+  Stats->CasRetryCount = InterlockedCompareExchange(&g_RingState.CasRetryCount, 0, 0);
   Stats->OldestTimestamp.QuadPart =
       InterlockedCompareExchange64(&g_RingState.OldestTimestamp, 0, 0);
   Stats->NewestTimestamp.QuadPart =
@@ -532,22 +688,27 @@ _Use_decl_annotations_ VOID MonRingBufferClear(VOID) {
     return;
   }
 
+  /*
+   * Clear requires coordination with both writers and readers.
+   * We use ReadLock and atomic resets for writer state.
+   */
   KIRQL oldIrql;
-  KeAcquireSpinLock(&g_RingState.WriteLock, &oldIrql);
-  KeAcquireSpinLockAtDpcLevel(&g_RingState.ReadLock);
+  KeAcquireSpinLock(&g_RingState.ReadLock, &oldIrql);
 
-  /* Reset pointers */
-  g_RingState.WriteOffset = 0;
-  g_RingState.ReadOffset = 0;
-  g_RingState.EventCount = 0;
-  g_RingState.OldestTimestamp = 0;
-  g_RingState.NewestTimestamp = 0;
+  /* Reset write pointers atomically */
+  InterlockedExchange64(&g_RingState.WriteHead, 0);
+  InterlockedExchange64(&g_RingState.WriteTail, 0);
+  InterlockedExchange64(&g_RingState.ReadOffset, 0);
+
+  /* Reset counters */
+  InterlockedExchange(&g_RingState.EventCount, 0);
+  InterlockedExchange64(&g_RingState.OldestTimestamp, 0);
+  InterlockedExchange64(&g_RingState.NewestTimestamp, 0);
 
   /* Zero buffer for clean state */
   RtlZeroMemory(g_RingState.Base, g_RingState.BufferSize);
 
-  KeReleaseSpinLockFromDpcLevel(&g_RingState.ReadLock);
-  KeReleaseSpinLock(&g_RingState.WriteLock, oldIrql);
+  KeReleaseSpinLock(&g_RingState.ReadLock, oldIrql);
 
   DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL, "[WIN11MON][RING] Buffer cleared\n");
 }

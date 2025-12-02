@@ -74,10 +74,10 @@ extern "C" {
  * Configuration Constants (Mirrors Kernel)
  *-------------------------------------------------------------------------*/
 #define WIN11MON_INTERCEPT_MAX_OPS_PER_SUBMIT 4096
-#define WIN11MON_INTERCEPT_DEFAULT_MAX_OPS 1024
+#define WIN11MON_INTERCEPT_DEFAULT_MAX_OPS    1024
 #define WIN11MON_INTERCEPT_DEFAULT_RATE_LIMIT 1000
-#define WIN11MON_INTERCEPT_MAX_BLACKLIST 64
-#define WIN11MON_INTERCEPT_MAX_BUFFER_SIZE (256 * 1024 * 1024)
+#define WIN11MON_INTERCEPT_MAX_BLACKLIST      64
+#define WIN11MON_INTERCEPT_MAX_BUFFER_SIZE    (256 * 1024 * 1024)
 
 /*--------------------------------------------------------------------------
  * Interception Action Results (mirrors kernel MON_INTERCEPT_ACTION)
@@ -92,19 +92,18 @@ typedef enum _WIN11MON_INTERCEPT_ACTION {
  * Violation Reason Codes (mirrors kernel MON_INTERCEPT_REASON)
  *-------------------------------------------------------------------------*/
 typedef enum _WIN11MON_INTERCEPT_REASON {
-  Win11MonReason_None = 0,                /* No violation */
-  Win11MonReason_RegBuffersCorrupted = 1, /* A2 validation failed (T1068) */
-  Win11MonReason_KernelAddressInBuffer =
-      2, /* Buffer VA in kernel space (T1068) */
-  Win11MonReason_ExcessiveOperations = 3, /* Too many SQEs (T1499) */
-  Win11MonReason_SuspiciousOpCode = 4,    /* Unknown/blocked opcode (T1203) */
-  Win11MonReason_ProcessBlacklisted = 5,  /* PID on block list (T1055) */
-  Win11MonReason_RateLimitExceeded = 6,   /* Submit rate exceeded (T1499) */
-  Win11MonReason_InvalidHandle = 7,       /* IoRing handle invalid */
-  Win11MonReason_PolicyDisabled = 8,      /* Interception disabled */
-  Win11MonReason_ValidationError = 9,     /* Internal error */
-  Win11MonReason_BufferSizeTooLarge = 10, /* Single buffer exceeds limit */
-  Win11MonReason_MalformedRequest = 11    /* Request structure invalid */
+  Win11MonReason_None = 0,                  /* No violation */
+  Win11MonReason_RegBuffersCorrupted = 1,   /* A2 validation failed (T1068) */
+  Win11MonReason_KernelAddressInBuffer = 2, /* Buffer VA in kernel space (T1068) */
+  Win11MonReason_ExcessiveOperations = 3,   /* Too many SQEs (T1499) */
+  Win11MonReason_SuspiciousOpCode = 4,      /* Unknown/blocked opcode (T1203) */
+  Win11MonReason_ProcessBlacklisted = 5,    /* PID on block list (T1055) */
+  Win11MonReason_RateLimitExceeded = 6,     /* Submit rate exceeded (T1499) */
+  Win11MonReason_InvalidHandle = 7,         /* IoRing handle invalid */
+  Win11MonReason_PolicyDisabled = 8,        /* Interception disabled */
+  Win11MonReason_ValidationError = 9,       /* Internal error */
+  Win11MonReason_BufferSizeTooLarge = 10,   /* Single buffer exceeds limit */
+  Win11MonReason_MalformedRequest = 11      /* Request structure invalid */
 } WIN11MON_INTERCEPT_REASON;
 
 /*--------------------------------------------------------------------------
@@ -126,9 +125,9 @@ typedef enum _WIN11MON_IORING_OP_CODE {
 /*--------------------------------------------------------------------------
  * SQE Flags
  *-------------------------------------------------------------------------*/
-#define WIN11MON_SQE_FLAG_NONE 0x00
-#define WIN11MON_SQE_FLAG_DRAIN_PRECEDING_OPS 0x01
-#define WIN11MON_SQE_FLAG_PREREGISTERED_FILE 0x01
+#define WIN11MON_SQE_FLAG_NONE                 0x00
+#define WIN11MON_SQE_FLAG_DRAIN_PRECEDING_OPS  0x01
+#define WIN11MON_SQE_FLAG_PREREGISTERED_FILE   0x01
 #define WIN11MON_SQE_FLAG_PREREGISTERED_BUFFER 0x02
 
 /*--------------------------------------------------------------------------
@@ -181,8 +180,7 @@ typedef struct _WIN11MON_INTERCEPT_POLICY {
   BYTE AuditMode; /* 0x05: Log but don't block */
 
   /* Validation toggles */
-  BYTE
-      BlockKernelAddresses; /* 0x06: Block if buffer VA >= MmUserProbeAddress */
+  BYTE BlockKernelAddresses;     /* 0x06: Block if buffer VA >= MmUserProbeAddress */
   BYTE BlockCorruptedRegBuffers; /* 0x07: Integrate with RegBuffers check */
   BYTE EnforceOperationLimit;    /* 0x08: Enforce MaxOperationsPerSubmit */
   BYTE EnforceRateLimit;         /* 0x09: Per-process rate limiting */
@@ -222,9 +220,8 @@ typedef struct _WIN11MON_INTERCEPT_REQUEST {
 #pragma pack(pop)
 
 C_ASSERT(sizeof(WIN11MON_INTERCEPT_REQUEST) == 32);
-#define WIN11MON_INTERCEPT_REQUEST_HEADER_SIZE \
-  sizeof(WIN11MON_INTERCEPT_REQUEST)
-#define WIN11MON_INTERCEPT_REQUEST_VERSION 1
+#define WIN11MON_INTERCEPT_REQUEST_HEADER_SIZE sizeof(WIN11MON_INTERCEPT_REQUEST)
+#define WIN11MON_INTERCEPT_REQUEST_VERSION     1
 
 /*--------------------------------------------------------------------------
  * Validation Response
@@ -311,10 +308,11 @@ C_ASSERT(sizeof(WIN11MON_BLACKLIST_ENTRY) == 208);
  * Optional user callback invoked before sending validation to kernel.
  * Return FALSE to skip kernel validation and allow the operation.
  *-------------------------------------------------------------------------*/
-typedef BOOL(CALLBACK* WIN11MON_PRE_VALIDATE_CALLBACK)(
-    _In_ PVOID Context, _In_ HANDLE IoRingHandle, _In_ DWORD OperationCount,
-    _In_reads_bytes_(BufferSize) const VOID* SubmissionBuffer,
-    _In_ DWORD BufferSize);
+typedef BOOL(CALLBACK *WIN11MON_PRE_VALIDATE_CALLBACK)(_In_ PVOID Context, _In_ HANDLE IoRingHandle,
+                                                       _In_ DWORD OperationCount,
+                                                       _In_reads_bytes_(BufferSize)
+                                                           const VOID *SubmissionBuffer,
+                                                       _In_ DWORD BufferSize);
 
 /*--------------------------------------------------------------------------
  * Post-Validation Callback
@@ -322,9 +320,8 @@ typedef BOOL(CALLBACK* WIN11MON_PRE_VALIDATE_CALLBACK)(
  * Optional user callback invoked after kernel validation completes.
  * Receives the validation result for logging/metrics.
  *-------------------------------------------------------------------------*/
-typedef VOID(CALLBACK* WIN11MON_POST_VALIDATE_CALLBACK)(
-    _In_ PVOID Context, _In_ HANDLE IoRingHandle,
-    _In_ const WIN11MON_INTERCEPT_RESPONSE* Response);
+typedef VOID(CALLBACK *WIN11MON_POST_VALIDATE_CALLBACK)(
+    _In_ PVOID Context, _In_ HANDLE IoRingHandle, _In_ const WIN11MON_INTERCEPT_RESPONSE *Response);
 
 /*==========================================================================
  * Public API - Initialization
@@ -380,8 +377,7 @@ WIN11MON_API BOOL Win11MonInterceptIsInitialized(_In_ HWIN11MON Handle);
  * @returns    S_OK on success
  * @thread-safety Safe; synchronized with driver
  */
-WIN11MON_API HRESULT Win11MonInterceptEnable(_In_ HWIN11MON Handle,
-                                             _In_ BOOL Enable);
+WIN11MON_API HRESULT Win11MonInterceptEnable(_In_ HWIN11MON Handle, _In_ BOOL Enable);
 
 /**
  * @function   Win11MonInterceptIsEnabled
@@ -405,8 +401,8 @@ WIN11MON_API BOOL Win11MonInterceptIsEnabled(_In_ HWIN11MON Handle);
  *             E_INVALIDARG if Policy->Size incorrect
  * @thread-safety Synchronized via driver spinlock
  */
-WIN11MON_API HRESULT Win11MonInterceptSetPolicy(
-    _In_ HWIN11MON Handle, _In_ const WIN11MON_INTERCEPT_POLICY* Policy);
+WIN11MON_API HRESULT Win11MonInterceptSetPolicy(_In_ HWIN11MON Handle,
+                                                _In_ const WIN11MON_INTERCEPT_POLICY *Policy);
 
 /**
  * @function   Win11MonInterceptGetPolicy
@@ -416,8 +412,8 @@ WIN11MON_API HRESULT Win11MonInterceptSetPolicy(
  * @returns    S_OK on success
  * @thread-safety Lock-free snapshot
  */
-WIN11MON_API HRESULT Win11MonInterceptGetPolicy(
-    _In_ HWIN11MON Handle, _Out_ PWIN11MON_INTERCEPT_POLICY Policy);
+WIN11MON_API HRESULT Win11MonInterceptGetPolicy(_In_ HWIN11MON Handle,
+                                                _Out_ PWIN11MON_INTERCEPT_POLICY Policy);
 
 /**
  * @function   Win11MonInterceptSetDefaultPolicy
@@ -439,8 +435,8 @@ WIN11MON_API HRESULT Win11MonInterceptSetDefaultPolicy(_In_ HWIN11MON Handle);
  * @returns    S_OK on success
  * @thread-safety Lock-free snapshot
  */
-WIN11MON_API HRESULT Win11MonInterceptGetStats(
-    _In_ HWIN11MON Handle, _Out_ PWIN11MON_INTERCEPT_STATS Stats);
+WIN11MON_API HRESULT Win11MonInterceptGetStats(_In_ HWIN11MON Handle,
+                                               _Out_ PWIN11MON_INTERCEPT_STATS Stats);
 
 /**
  * @function   Win11MonInterceptResetStats
@@ -466,8 +462,7 @@ WIN11MON_API HRESULT Win11MonInterceptResetStats(_In_ HWIN11MON Handle);
  *             E_INVALIDARG if ProcessId == 0
  * @thread-safety Spinlock-synchronized
  */
-WIN11MON_API HRESULT Win11MonInterceptAddBlacklist(_In_ HWIN11MON Handle,
-                                                   _In_ DWORD ProcessId,
+WIN11MON_API HRESULT Win11MonInterceptAddBlacklist(_In_ HWIN11MON Handle, _In_ DWORD ProcessId,
                                                    _In_opt_ PCSTR Reason);
 
 /**
@@ -479,8 +474,7 @@ WIN11MON_API HRESULT Win11MonInterceptAddBlacklist(_In_ HWIN11MON Handle,
  *             S_FALSE if not found
  * @thread-safety Spinlock-synchronized
  */
-WIN11MON_API HRESULT Win11MonInterceptRemoveBlacklist(_In_ HWIN11MON Handle,
-                                                      _In_ DWORD ProcessId);
+WIN11MON_API HRESULT Win11MonInterceptRemoveBlacklist(_In_ HWIN11MON Handle, _In_ DWORD ProcessId);
 
 /**
  * @function   Win11MonInterceptClearBlacklist
@@ -499,8 +493,7 @@ WIN11MON_API HRESULT Win11MonInterceptClearBlacklist(_In_ HWIN11MON Handle);
  * @returns    TRUE if blacklisted
  * @thread-safety Lock-free linear scan
  */
-WIN11MON_API BOOL Win11MonInterceptIsBlacklisted(_In_ HWIN11MON Handle,
-                                                 _In_ DWORD ProcessId);
+WIN11MON_API BOOL Win11MonInterceptIsBlacklisted(_In_ HWIN11MON Handle, _In_ DWORD ProcessId);
 
 /**
  * @function   Win11MonInterceptGetBlacklist
@@ -511,10 +504,10 @@ WIN11MON_API BOOL Win11MonInterceptIsBlacklisted(_In_ HWIN11MON Handle,
  * @param[out] EntryCount - Actual entries returned
  * @returns    S_OK on success
  */
-WIN11MON_API HRESULT Win11MonInterceptGetBlacklist(
-    _In_ HWIN11MON Handle,
-    _Out_writes_to_(MaxEntries, *EntryCount) PWIN11MON_BLACKLIST_ENTRY Buffer,
-    _In_ DWORD MaxEntries, _Out_ DWORD* EntryCount);
+WIN11MON_API HRESULT Win11MonInterceptGetBlacklist(_In_ HWIN11MON Handle,
+                                                   _Out_writes_to_(MaxEntries, *EntryCount)
+                                                       PWIN11MON_BLACKLIST_ENTRY Buffer,
+                                                   _In_ DWORD MaxEntries, _Out_ DWORD *EntryCount);
 
 /*==========================================================================
  * Public API - Callbacks
@@ -595,10 +588,12 @@ WIN11MON_API BOOL Win11MonInterceptAreHooksInstalled(_In_ HWIN11MON Handle);
  *             E_INVALIDARG if parameters invalid
  * @note       Normally called internally by installed hooks
  */
-WIN11MON_API HRESULT Win11MonInterceptValidate(
-    _In_ HWIN11MON Handle, _In_ HANDLE IoRingHandle, _In_ DWORD OperationCount,
-    _In_reads_bytes_(BufferSize) const VOID* SubmissionBuffer,
-    _In_ DWORD BufferSize, _Out_ PWIN11MON_INTERCEPT_RESPONSE Response);
+WIN11MON_API HRESULT Win11MonInterceptValidate(_In_ HWIN11MON Handle, _In_ HANDLE IoRingHandle,
+                                               _In_ DWORD OperationCount,
+                                               _In_reads_bytes_(BufferSize)
+                                                   const VOID *SubmissionBuffer,
+                                               _In_ DWORD BufferSize,
+                                               _Out_ PWIN11MON_INTERCEPT_RESPONSE Response);
 
 /**
  * @function   Win11MonInterceptBuildRequest
@@ -613,12 +608,10 @@ WIN11MON_API HRESULT Win11MonInterceptValidate(
  *             E_INSUFFICIENT_BUFFER if RequestBufferSize too small
  */
 WIN11MON_API HRESULT Win11MonInterceptBuildRequest(
-    _In_ HANDLE IoRingHandle,
-    _In_reads_(SqeCount) const WIN11MON_SERIALIZED_SQE* SqeArray,
+    _In_ HANDLE IoRingHandle, _In_reads_(SqeCount) const WIN11MON_SERIALIZED_SQE *SqeArray,
     _In_ DWORD SqeCount,
-    _Out_writes_bytes_to_(RequestBufferSize, *RequestSize)
-        PWIN11MON_INTERCEPT_REQUEST Request,
-    _In_ DWORD RequestBufferSize, _Out_ DWORD* RequestSize);
+    _Out_writes_bytes_to_(RequestBufferSize, *RequestSize) PWIN11MON_INTERCEPT_REQUEST Request,
+    _In_ DWORD RequestBufferSize, _Out_ DWORD *RequestSize);
 
 #ifdef __cplusplus
 }

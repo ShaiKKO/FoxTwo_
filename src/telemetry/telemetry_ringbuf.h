@@ -4,7 +4,7 @@
  * Author: Colin MacRitchie
  * Organization: ziX Performance Labs
  * File: telemetry_ringbuf.h
- * Version: 1.1
+ * Version: 2.0
  * Date: 2025-12-01
  * Copyright:
  *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and
@@ -13,22 +13,18 @@
  *
  * Summary
  * -------
- * Implements a fixed-size circular buffer for telemetry event storage.
+ * Implements a fixed-size circular buffer for telemetry event storage using
+ * a true lock-free multi-producer write path based on DPDK rte_ring algorithm.
  * Provides bounded memory usage with automatic overwrite of oldest events.
  *
  * Design Principles:
- * - Lock-free single-writer producer (MonRingBufferWrite)
+ * - Lock-free multi-producer writes via CAS (InterlockedCompareExchange64)
+ * - WriteHead/WriteTail separation: head reserves, tail commits
  * - Multi-reader consumer with spinlock serialization
  * - Automatic overwrite of oldest events when full
  * - Snapshot capability for non-destructive diagnostics
  * - IRQL-safe up to DISPATCH_LEVEL for writes
- *
- * References:
- * - Microsoft VirtualSerial2 ringbuffer.h sample
- * - Win-Kernel-Logger lock-free design:
- * https://github.com/stuxnet147/Win-Kernel-Logger
- * - ETW circular buffer:
- * https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties
+ * - Cache-line aligned hot paths to minimize false sharing
  */
 
 #ifndef _ZIX_LABS_TELEMETRY_RINGBUF_H_
@@ -103,6 +99,7 @@ typedef struct _MON_RING_BUFFER_STATS {
   ULONG EventsOverwritten;       /* Events lost to overwrite */
   ULONG EventsDropped;           /* Events dropped (too large, etc) */
   ULONG WrapCount;               /* Buffer wrap-around count */
+  ULONG CasRetryCount;           /* CAS retries (contention metric) */
   LARGE_INTEGER OldestTimestamp; /* Oldest event timestamp */
   LARGE_INTEGER NewestTimestamp; /* Newest event timestamp */
 } MON_RING_BUFFER_STATS, *PMON_RING_BUFFER_STATS;
@@ -177,11 +174,10 @@ _IRQL_requires_max_(DISPATCH_LEVEL) BOOLEAN MonRingBufferIsInitialized(VOID);
 
 /**
  * @function   MonRingBufferWrite
- * @purpose    Write an event to the ring buffer (lock-free for single writer)
+ * @purpose    Write an event to the ring buffer (lock-free multi-producer)
  * @precondition IRQL <= DISPATCH_LEVEL; Ring buffer initialized
  * @postcondition Event stored in ring buffer, oldest overwritten if full
- * @thread-safety Lock-free single-writer; concurrent writes require external
- * sync
+ * @thread-safety Lock-free multi-producer via CAS; concurrent writes safe
  * @side-effects May overwrite oldest events; updates statistics
  *
  * @param[in] EventType - Event type classification
@@ -190,6 +186,7 @@ _IRQL_requires_max_(DISPATCH_LEVEL) BOOLEAN MonRingBufferIsInitialized(VOID);
  * @returns   STATUS_SUCCESS on success
  *            STATUS_NOT_SUPPORTED if ring buffer not initialized
  *            STATUS_BUFFER_OVERFLOW if event too large for buffer
+ *            STATUS_DEVICE_BUSY if CAS retries exceeded (high contention)
  */
 _IRQL_requires_max_(DISPATCH_LEVEL) NTSTATUS
     MonRingBufferWrite(_In_ MONITOR_EVENT_TYPE EventType,

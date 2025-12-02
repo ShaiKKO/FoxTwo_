@@ -529,7 +529,7 @@ static VOID MonHcProcessSharedObjects(_In_ PMON_HC_HASH_TABLE Table) {
 /**
  * @function   MonHcCorrelateHandles
  * @purpose    Enumerate handles and find cross-process sharing
- * @precondition IRQL == PASSIVE_LEVEL
+ * @precondition IRQL == PASSIVE_LEVEL, subsystem initialized
  * @returns    STATUS_SUCCESS on completion
  *
  * @param[out] SharedCount - Number of shared objects found (optional)
@@ -572,7 +572,7 @@ _IRQL_requires_(PASSIVE_LEVEL) NTSTATUS MonHcCorrelateHandles(_Out_opt_ ULONG *S
 /**
  * @function   MonHcEnumerateSharedObjects
  * @purpose    Enumerate shared objects and invoke callback
- * @precondition IRQL == PASSIVE_LEVEL
+ * @precondition IRQL == PASSIVE_LEVEL, subsystem initialized
  */
 typedef BOOLEAN(NTAPI *PMON_HC_SHARED_CALLBACK)(_In_ PVOID ObjectAddress,
                                                 _In_ UCHAR ObjectTypeIndex, _In_ UCHAR ProcessCount,

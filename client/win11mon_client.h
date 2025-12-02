@@ -60,7 +60,7 @@ extern "C" {
 /*--------------------------------------------------------------------------
  * Opaque Handle Type
  *-------------------------------------------------------------------------*/
-typedef struct _WIN11MON_HANDLE* HWIN11MON;
+typedef struct _WIN11MON_HANDLE *HWIN11MON;
 
 /*--------------------------------------------------------------------------
  * Version Information
@@ -74,20 +74,32 @@ typedef struct _WIN11MON_VERSION {
 
 /*--------------------------------------------------------------------------
  * Capability Flags (mirrors kernel WIN11MON_CAP_* defines)
+ * IMPORTANT: These must exactly match the kernel definitions!
  *-------------------------------------------------------------------------*/
-#define WIN11MON_CLIENT_CAP_IOP_MC 0x00000001u
-#define WIN11MON_CLIENT_CAP_POOL_TRACK 0x00000002u
-#define WIN11MON_CLIENT_CAP_TELEMETRY 0x00000004u
-#define WIN11MON_CLIENT_CAP_RATE_LIMIT 0x00000008u
+/* Core Capabilities (0x01-0x10) */
+#define WIN11MON_CLIENT_CAP_IOP_MC          0x00000001u
+#define WIN11MON_CLIENT_CAP_POOL_TRACK      0x00000002u
+#define WIN11MON_CLIENT_CAP_TELEMETRY       0x00000004u
+#define WIN11MON_CLIENT_CAP_RATE_LIMIT      0x00000008u
 #define WIN11MON_CLIENT_CAP_ENCRYPTION_STUB 0x00000010u
-#define WIN11MON_CLIENT_CAP_IORING_ENUM 0x00000100u
-#define WIN11MON_CLIENT_CAP_REGBUF_INTEGRITY 0x00000200u
-#define WIN11MON_CLIENT_CAP_ETW_PROVIDER 0x00000400u
-#define WIN11MON_CLIENT_CAP_ADDR_MASKING 0x00000800u
-#define WIN11MON_CLIENT_CAP_PERPROC_RATELIMIT 0x00001000u
-#define WIN11MON_CLIENT_CAP_RING_BUFFER 0x00002000u
-#define WIN11MON_CLIENT_CAP_RUNTIME_OFFSETS 0x00004000u
-#define WIN11MON_CLIENT_CAP_ATTACK_TAGGING 0x00008000u
+
+/* Enhancement Capabilities (A1-E1) */
+#define WIN11MON_CLIENT_CAP_IORING_ENUM       0x00000020u /* A1: IoRing enumeration */
+#define WIN11MON_CLIENT_CAP_REGBUF_INTEGRITY  0x00000040u /* A2: RegBuffers validation */
+#define WIN11MON_CLIENT_CAP_EXTENDED_TAGS     0x00000080u /* A3: Extended pool tag monitoring */
+#define WIN11MON_CLIENT_CAP_ETW_PROVIDER      0x00000100u /* B1: ETW TraceLogging */
+#define WIN11MON_CLIENT_CAP_ADDR_MASKING      0x00000200u /* B2: Address masking */
+#define WIN11MON_CLIENT_CAP_PERPROC_RATELIMIT 0x00000400u /* B3: Per-process rate limiting */
+#define WIN11MON_CLIENT_CAP_RUNTIME_OFFSETS   0x00000800u /* C1: Runtime offset resolution */
+#define WIN11MON_CLIENT_CAP_ATTACK_TAGGING    0x00001000u /* D1: MITRE ATT&CK tagging */
+#define WIN11MON_CLIENT_CAP_RING_BUFFER       0x00002000u /* E1: Ring buffer telemetry */
+
+/* Phase Capabilities (6-9) */
+#define WIN11MON_CLIENT_CAP_IORING_INTERCEPT 0x00004000u /* Phase 6: IoRing interception */
+#define WIN11MON_CLIENT_CAP_PROCESS_PROFILE  0x00008000u /* Phase 7: Process profiling */
+#define WIN11MON_CLIENT_CAP_ANOMALY_RULES    0x00010000u /* Phase 7: Anomaly rule engine */
+#define WIN11MON_CLIENT_CAP_MEM_MONITOR      0x00020000u /* Phase 8: Memory region monitoring */
+#define WIN11MON_CLIENT_CAP_CROSS_PROCESS    0x00040000u /* Phase 9: Cross-process detection */
 
 /*--------------------------------------------------------------------------
  * Monitoring Configuration
@@ -140,6 +152,7 @@ typedef struct _WIN11MON_RINGBUF_STATS {
   DWORD EventsOverwritten;
   DWORD EventsDropped;
   DWORD WrapCount;
+  DWORD CasRetryCount; /* CAS retries (lock-free contention metric) */
   DWORD64 OldestTimestamp;
   DWORD64 NewestTimestamp;
 } WIN11MON_RINGBUF_STATS, *PWIN11MON_RINGBUF_STATS;
@@ -159,6 +172,268 @@ typedef struct _WIN11MON_RATE_STATS {
   DWORD GlobalLimitPerSec;
   DWORD PerProcessLimitPerSec;
 } WIN11MON_RATE_STATS, *PWIN11MON_RATE_STATS;
+
+/*--------------------------------------------------------------------------
+ * Phase 7: Process Profiling Structures
+ *-------------------------------------------------------------------------*/
+
+/* Anomaly rule ID enumeration */
+typedef enum _WIN11MON_ANOMALY_RULE_ID {
+  Win11MonAnomalyRule_None = 0,
+  Win11MonAnomalyRule_HighOpsFrequency = 1,
+  Win11MonAnomalyRule_LargeBufferRegistration = 2,
+  Win11MonAnomalyRule_RapidHandleCreation = 3,
+  Win11MonAnomalyRule_ElevatedIoRingAbuse = 4,
+  Win11MonAnomalyRule_BurstPattern = 5,
+  Win11MonAnomalyRule_ConcurrentTargets = 6,
+  Win11MonAnomalyRule_ViolationAccumulation = 7,
+  Win11MonAnomalyRule_Max = 8
+} WIN11MON_ANOMALY_RULE_ID;
+
+/* Anomaly severity enumeration */
+typedef enum _WIN11MON_ANOMALY_SEVERITY {
+  Win11MonSeverity_Info = 0,
+  Win11MonSeverity_Low = 1,
+  Win11MonSeverity_Medium = 2,
+  Win11MonSeverity_High = 3,
+  Win11MonSeverity_Critical = 4
+} WIN11MON_ANOMALY_SEVERITY;
+
+/* Profile summary (IOCTL_MONITOR_PROFILE_GET/LIST output) */
+typedef struct _WIN11MON_PROFILE_SUMMARY {
+  DWORD Size;
+  DWORD ProcessId;
+  WCHAR ProcessName[64];
+  DWORD ActiveHandles;
+  DWORD64 TotalOperations;
+  DWORD OpsPerSecond;
+  DWORD64 TotalMemoryBytes;
+  DWORD AnomalyScore;
+  DWORD AnomalyEventCount;
+  DWORD ViolationCount;
+  DWORD TriggeredRules;
+  DWORD64 FirstSeenTime;
+  DWORD64 LastActivityTime;
+  DWORD ActiveDurationSec;
+  DWORD Flags;
+} WIN11MON_PROFILE_SUMMARY, *PWIN11MON_PROFILE_SUMMARY;
+
+/* ML Feature vector (IOCTL_MONITOR_PROFILE_EXPORT_ML output) */
+typedef struct _WIN11MON_ML_FEATURE_VECTOR {
+  DWORD Size;
+  DWORD Version;
+  DWORD ProcessId;
+  DWORD Reserved1;
+  DWORD64 Timestamp;
+  float OpsPerSecond;
+  float SubmitsPerMinute;
+  float HandleCount;
+  float AvgBufferSizeKB;
+  float MaxBufferSizeMB;
+  float TotalMemoryMB;
+  float ReadWriteRatio;
+  float RegisteredFiles;
+  float ActiveDurationMin;
+  float BurstFrequency;
+  float ViolationRate;
+  float ProcessAgeMin;
+  DWORD ProcessElevation;
+  DWORD ProcessInteractive;
+  DWORD ProcessIsService;
+  DWORD AnomalyScore;
+  DWORD Label;
+  DWORD Reserved2;
+} WIN11MON_ML_FEATURE_VECTOR, *PWIN11MON_ML_FEATURE_VECTOR;
+
+/* Profile statistics */
+typedef struct _WIN11MON_PROFILE_STATS {
+  DWORD Size;
+  DWORD Reserved;
+  DWORD ActiveProfiles;
+  DWORD TotalProfilesCreated;
+  DWORD TotalProfilesDestroyed;
+  DWORD TotalAnomaliesDetected;
+  DWORD64 TotalUpdates;
+  DWORD64 TotalExports;
+} WIN11MON_PROFILE_STATS, *PWIN11MON_PROFILE_STATS;
+
+/* Profile configuration */
+typedef struct _WIN11MON_PROFILE_CONFIG {
+  DWORD Size;
+  DWORD Enabled;
+  DWORD AutoExport;
+  DWORD AutoBlacklist;
+  DWORD AnomalyThreshold;
+  DWORD BlacklistThreshold;
+  DWORD HistoryWindowSec;
+  DWORD Reserved;
+} WIN11MON_PROFILE_CONFIG, *PWIN11MON_PROFILE_CONFIG;
+
+/* Anomaly rule definition */
+typedef struct _WIN11MON_ANOMALY_RULE {
+  WIN11MON_ANOMALY_RULE_ID RuleId;
+  WCHAR RuleName[32];
+  DWORD Threshold;
+  DWORD WindowSeconds;
+  WIN11MON_ANOMALY_SEVERITY Severity;
+  DWORD ScoreImpact;
+  DWORD Enabled;
+  CHAR MitreTechnique[16];
+} WIN11MON_ANOMALY_RULE, *PWIN11MON_ANOMALY_RULE;
+
+/* Anomaly statistics */
+typedef struct _WIN11MON_ANOMALY_STATS {
+  DWORD Size;
+  DWORD TotalRules;
+  DWORD EnabledRules;
+  DWORD TotalEvaluations;
+  DWORD TotalMatches;
+  DWORD Reserved;
+} WIN11MON_ANOMALY_STATS, *PWIN11MON_ANOMALY_STATS;
+
+/*--------------------------------------------------------------------------
+ * Phase 8: Memory Monitoring Structures
+ *-------------------------------------------------------------------------*/
+
+/* VAD type enumeration */
+typedef enum _WIN11MON_VAD_TYPE {
+  Win11MonVadType_Private = 0,
+  Win11MonVadType_Mapped = 1,
+  Win11MonVadType_Image = 2,
+  Win11MonVadType_Physical = 3,
+  Win11MonVadType_WriteWatch = 4,
+  Win11MonVadType_LargePages = 5,
+  Win11MonVadType_Rotate = 6,
+  Win11MonVadType_Unknown = 7
+} WIN11MON_VAD_TYPE;
+
+/* Memory anomaly type enumeration */
+typedef enum _WIN11MON_MEM_ANOMALY {
+  Win11MonMemAnomaly_None = 0,
+  Win11MonMemAnomaly_ExecutableHeap = 1,
+  Win11MonMemAnomaly_WritableCode = 2,
+  Win11MonMemAnomaly_UnbackedExecutable = 3,
+  Win11MonMemAnomaly_HiddenVad = 4,
+  Win11MonMemAnomaly_SuspiciousProtection = 5
+} WIN11MON_MEM_ANOMALY;
+
+/* VAD information */
+typedef struct _WIN11MON_VAD_INFO {
+  DWORD64 StartAddress;
+  DWORD64 EndAddress;
+  DWORD64 Size;
+  WIN11MON_VAD_TYPE VadType;
+  DWORD Protection;
+  DWORD InitialProtection;
+  DWORD IsExecutable;
+  DWORD IsWritable;
+  DWORD IsPrivate;
+  DWORD IsCommitted;
+  DWORD HasFileBackingStore;
+  WCHAR BackingFileName[64];
+} WIN11MON_VAD_INFO, *PWIN11MON_VAD_INFO;
+
+/* VAD scan result */
+typedef struct _WIN11MON_VAD_SCAN_RESULT {
+  DWORD Size;
+  DWORD ProcessId;
+  DWORD VadCount;
+  DWORD DetailedInfoCount;
+  DWORD64 ScanStartTime;
+  DWORD64 ScanEndTime;
+  DWORD ScanDurationUs;
+  DWORD SuspiciousVadCount;
+  DWORD AnomalyFlags;
+  DWORD64 TotalPrivateBytes;
+  DWORD64 TotalMappedBytes;
+  DWORD64 TotalExecutableBytes;
+  DWORD64 TotalCommittedBytes;
+} WIN11MON_VAD_SCAN_RESULT, *PWIN11MON_VAD_SCAN_RESULT;
+
+/* Memory statistics */
+typedef struct _WIN11MON_MEM_STATS {
+  DWORD Size;
+  DWORD Reserved;
+  DWORD64 TotalVadScans;
+  DWORD64 TotalMdlsTracked;
+  DWORD TotalAnomaliesDetected;
+  DWORD ExecutableHeapCount;
+  DWORD WritableCodeCount;
+  DWORD UnbackedExecutableCount;
+} WIN11MON_MEM_STATS, *PWIN11MON_MEM_STATS;
+
+/*--------------------------------------------------------------------------
+ * Phase 9: Cross-Process Detection Structures
+ *-------------------------------------------------------------------------*/
+
+/* Cross-process alert type */
+typedef enum _WIN11MON_XP_ALERT_TYPE {
+  Win11MonXpAlert_None = 0,
+  Win11MonXpAlert_SharedIoRing = 1,
+  Win11MonXpAlert_SharedSection = 2,
+  Win11MonXpAlert_DuplicatedHandle = 3,
+  Win11MonXpAlert_ProcessHollowing = 4,
+  Win11MonXpAlert_ThreadInjection = 5,
+  Win11MonXpAlert_ApcInjection = 6,
+  Win11MonXpAlert_SuspiciousAccess = 7
+} WIN11MON_XP_ALERT_TYPE;
+
+/* Cross-process severity */
+typedef enum _WIN11MON_XP_SEVERITY {
+  Win11MonXpSeverity_Info = 0,
+  Win11MonXpSeverity_Low = 1,
+  Win11MonXpSeverity_Medium = 2,
+  Win11MonXpSeverity_High = 3,
+  Win11MonXpSeverity_Critical = 4
+} WIN11MON_XP_SEVERITY;
+
+/* Shared object information */
+typedef struct _WIN11MON_XP_SHARED_OBJECT {
+  DWORD64 ObjectAddress;
+  DWORD ObjectType;
+  DWORD ShareCount;
+  DWORD OwnerProcessIds[8];
+  DWORD Flags;
+  DWORD RiskScore;
+} WIN11MON_XP_SHARED_OBJECT, *PWIN11MON_XP_SHARED_OBJECT;
+
+/* Cross-process alert event */
+typedef struct _WIN11MON_XP_ALERT_EVENT {
+  DWORD Size;
+  WIN11MON_XP_ALERT_TYPE AlertType;
+  WIN11MON_XP_SEVERITY Severity;
+  DWORD RiskScore;
+  DWORD SourceProcessId;
+  DWORD TargetProcessId;
+  DWORD64 Timestamp;
+  WCHAR SourceProcessName[64];
+  WCHAR TargetProcessName[64];
+  CHAR MitreTechnique[16];
+  CHAR Description[128];
+} WIN11MON_XP_ALERT_EVENT, *PWIN11MON_XP_ALERT_EVENT;
+
+/* Cross-process configuration */
+typedef struct _WIN11MON_XP_CONFIG {
+  DWORD Size;
+  DWORD Enabled;
+  DWORD AlertThreshold;
+  DWORD ScanIntervalMs;
+  DWORD MaxTrackedProcesses;
+  DWORD MaxSharedObjects;
+  DWORD Reserved[2];
+} WIN11MON_XP_CONFIG, *PWIN11MON_XP_CONFIG;
+
+/* Cross-process statistics */
+typedef struct _WIN11MON_XP_STATS {
+  DWORD Size;
+  DWORD Reserved;
+  DWORD64 TotalScans;
+  DWORD64 TotalSharedObjectsDetected;
+  DWORD64 TotalAlertsGenerated;
+  DWORD ActiveProcessEntries;
+  DWORD ActiveSharedObjects;
+  DWORD64 LastScanTime;
+} WIN11MON_XP_STATS, *PWIN11MON_XP_STATS;
 
 /*--------------------------------------------------------------------------
  * Offset Resolution Status
@@ -216,30 +491,21 @@ typedef struct _WIN11MON_EVENT_HEADER {
 /*--------------------------------------------------------------------------
  * Async Event Callback
  *-------------------------------------------------------------------------*/
-typedef VOID(CALLBACK* WIN11MON_EVENT_CALLBACK)(_In_ PVOID Context,
-                                                _In_reads_bytes_(EventSize)
-                                                    const VOID* EventData,
+typedef VOID(CALLBACK *WIN11MON_EVENT_CALLBACK)(_In_ PVOID Context,
+                                                _In_reads_bytes_(EventSize) const VOID *EventData,
                                                 _In_ DWORD EventSize);
 
 /*--------------------------------------------------------------------------
  * Error Codes
  *-------------------------------------------------------------------------*/
-#define WIN11MON_E_DRIVER_NOT_FOUND \
-  MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0001)
-#define WIN11MON_E_VERSION_MISMATCH \
-  MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0002)
-#define WIN11MON_E_ACCESS_DENIED \
-  MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0003)
-#define WIN11MON_E_INVALID_HANDLE \
-  MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0004)
-#define WIN11MON_E_BUFFER_TOO_SMALL \
-  MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0005)
-#define WIN11MON_E_NOT_SUPPORTED \
-  MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0006)
-#define WIN11MON_E_NO_MORE_EVENTS \
-  MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0007)
-#define WIN11MON_E_ASYNC_PENDING \
-  MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0008)
+#define WIN11MON_E_DRIVER_NOT_FOUND MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0001)
+#define WIN11MON_E_VERSION_MISMATCH MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0002)
+#define WIN11MON_E_ACCESS_DENIED    MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0003)
+#define WIN11MON_E_INVALID_HANDLE   MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0004)
+#define WIN11MON_E_BUFFER_TOO_SMALL MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0005)
+#define WIN11MON_E_NOT_SUPPORTED    MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0006)
+#define WIN11MON_E_NO_MORE_EVENTS   MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0007)
+#define WIN11MON_E_ASYNC_PENDING    MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x0008)
 
 /*==========================================================================
  * Public API - Handle Management
@@ -253,7 +519,7 @@ typedef VOID(CALLBACK* WIN11MON_EVENT_CALLBACK)(_In_ PVOID Context,
  *             WIN11MON_E_DRIVER_NOT_FOUND if driver not loaded
  *             WIN11MON_E_ACCESS_DENIED if access denied
  */
-WIN11MON_API HRESULT Win11MonOpen(_Out_ HWIN11MON* Handle);
+WIN11MON_API HRESULT Win11MonOpen(_Out_ HWIN11MON *Handle);
 
 /**
  * @function   Win11MonClose
@@ -280,8 +546,7 @@ WIN11MON_API BOOL Win11MonIsAvailable(VOID);
  * @param[out] Version - Receives version info
  * @returns    S_OK on success
  */
-WIN11MON_API HRESULT Win11MonGetVersion(_In_ HWIN11MON Handle,
-                                        _Out_ PWIN11MON_VERSION Version);
+WIN11MON_API HRESULT Win11MonGetVersion(_In_ HWIN11MON Handle, _Out_ PWIN11MON_VERSION Version);
 
 /**
  * @function   Win11MonHasCapability
@@ -290,8 +555,7 @@ WIN11MON_API HRESULT Win11MonGetVersion(_In_ HWIN11MON Handle,
  * @param[in]  CapabilityFlag - WIN11MON_CLIENT_CAP_* flag
  * @returns    TRUE if capability supported
  */
-WIN11MON_API BOOL Win11MonHasCapability(_In_ HWIN11MON Handle,
-                                        _In_ DWORD CapabilityFlag);
+WIN11MON_API BOOL Win11MonHasCapability(_In_ HWIN11MON Handle, _In_ DWORD CapabilityFlag);
 
 /*==========================================================================
  * Public API - Monitoring Control
@@ -304,8 +568,7 @@ WIN11MON_API BOOL Win11MonHasCapability(_In_ HWIN11MON Handle,
  * @param[in]  Config - Configuration settings
  * @returns    S_OK on success
  */
-WIN11MON_API HRESULT Win11MonEnable(_In_ HWIN11MON Handle,
-                                    _In_ const WIN11MON_CONFIG* Config);
+WIN11MON_API HRESULT Win11MonEnable(_In_ HWIN11MON Handle, _In_ const WIN11MON_CONFIG *Config);
 
 /**
  * @function   Win11MonDisable
@@ -334,8 +597,7 @@ WIN11MON_API HRESULT Win11MonTriggerScan(_In_ HWIN11MON Handle);
  * @param[out] Stats - Receives statistics
  * @returns    S_OK on success
  */
-WIN11MON_API HRESULT Win11MonGetStats(_In_ HWIN11MON Handle,
-                                      _Out_ PWIN11MON_STATS Stats);
+WIN11MON_API HRESULT Win11MonGetStats(_In_ HWIN11MON Handle, _Out_ PWIN11MON_STATS Stats);
 
 /**
  * @function   Win11MonGetRateStats
@@ -344,8 +606,7 @@ WIN11MON_API HRESULT Win11MonGetStats(_In_ HWIN11MON Handle,
  * @param[out] Stats - Receives rate limit statistics
  * @returns    S_OK on success
  */
-WIN11MON_API HRESULT Win11MonGetRateStats(_In_ HWIN11MON Handle,
-                                          _Out_ PWIN11MON_RATE_STATS Stats);
+WIN11MON_API HRESULT Win11MonGetRateStats(_In_ HWIN11MON Handle, _Out_ PWIN11MON_RATE_STATS Stats);
 
 /*==========================================================================
  * Public API - Event Fetching
@@ -363,10 +624,11 @@ WIN11MON_API HRESULT Win11MonGetRateStats(_In_ HWIN11MON Handle,
  *             WIN11MON_E_NO_MORE_EVENTS if queue empty
  *             WIN11MON_E_BUFFER_TOO_SMALL if buffer too small
  */
-WIN11MON_API HRESULT Win11MonFetchEvents(
-    _In_ HWIN11MON Handle,
-    _Out_writes_bytes_to_(BufferSize, *BytesFetched) PVOID Buffer,
-    _In_ DWORD BufferSize, _Out_ DWORD* BytesFetched, _Out_ DWORD* EventCount);
+WIN11MON_API HRESULT Win11MonFetchEvents(_In_ HWIN11MON Handle,
+                                         _Out_writes_bytes_to_(BufferSize, *BytesFetched)
+                                             PVOID Buffer,
+                                         _In_ DWORD BufferSize, _Out_ DWORD *BytesFetched,
+                                         _Out_ DWORD *EventCount);
 
 /*==========================================================================
  * Public API - IoRing Enumeration
@@ -382,10 +644,10 @@ WIN11MON_API HRESULT Win11MonFetchEvents(
  * @returns    S_OK on success
  *             WIN11MON_E_NOT_SUPPORTED if capability not available
  */
-WIN11MON_API HRESULT Win11MonEnumerateIoRings(
-    _In_ HWIN11MON Handle,
-    _Out_writes_to_(MaxEntries, *EntriesFound) PWIN11MON_IORING_INFO Buffer,
-    _In_ DWORD MaxEntries, _Out_ DWORD* EntriesFound);
+WIN11MON_API HRESULT Win11MonEnumerateIoRings(_In_ HWIN11MON Handle,
+                                              _Out_writes_to_(MaxEntries, *EntriesFound)
+                                                  PWIN11MON_IORING_INFO Buffer,
+                                              _In_ DWORD MaxEntries, _Out_ DWORD *EntriesFound);
 
 /*==========================================================================
  * Public API - Ring Buffer
@@ -398,8 +660,8 @@ WIN11MON_API HRESULT Win11MonEnumerateIoRings(
  * @param[out] Stats - Receives ring buffer statistics
  * @returns    S_OK on success
  */
-WIN11MON_API HRESULT Win11MonGetRingBufferStats(
-    _In_ HWIN11MON Handle, _Out_ PWIN11MON_RINGBUF_STATS Stats);
+WIN11MON_API HRESULT Win11MonGetRingBufferStats(_In_ HWIN11MON Handle,
+                                                _Out_ PWIN11MON_RINGBUF_STATS Stats);
 
 /**
  * @function   Win11MonSnapshotRingBuffer
@@ -411,10 +673,10 @@ WIN11MON_API HRESULT Win11MonGetRingBufferStats(
  * @returns    S_OK on success
  *             WIN11MON_E_BUFFER_TOO_SMALL if buffer too small
  */
-WIN11MON_API HRESULT Win11MonSnapshotRingBuffer(
-    _In_ HWIN11MON Handle,
-    _Out_writes_bytes_to_(BufferSize, *BytesWritten) PVOID Buffer,
-    _In_ DWORD BufferSize, _Out_ DWORD* BytesWritten);
+WIN11MON_API HRESULT Win11MonSnapshotRingBuffer(_In_ HWIN11MON Handle,
+                                                _Out_writes_bytes_to_(BufferSize, *BytesWritten)
+                                                    PVOID Buffer,
+                                                _In_ DWORD BufferSize, _Out_ DWORD *BytesWritten);
 
 /**
  * @function   Win11MonClearRingBuffer
@@ -435,8 +697,8 @@ WIN11MON_API HRESULT Win11MonClearRingBuffer(_In_ HWIN11MON Handle);
  * @param[out] Status - Receives offset status
  * @returns    S_OK on success
  */
-WIN11MON_API HRESULT Win11MonGetOffsetStatus(
-    _In_ HWIN11MON Handle, _Out_ PWIN11MON_OFFSET_STATUS Status);
+WIN11MON_API HRESULT Win11MonGetOffsetStatus(_In_ HWIN11MON Handle,
+                                             _Out_ PWIN11MON_OFFSET_STATUS Status);
 
 /*==========================================================================
  * Public API - Configuration
@@ -449,8 +711,7 @@ WIN11MON_API HRESULT Win11MonGetOffsetStatus(
  * @param[in]  Policy - Mask policy to set
  * @returns    S_OK on success
  */
-WIN11MON_API HRESULT Win11MonSetMaskPolicy(_In_ HWIN11MON Handle,
-                                           _In_ WIN11MON_MASK_POLICY Policy);
+WIN11MON_API HRESULT Win11MonSetMaskPolicy(_In_ HWIN11MON Handle, _In_ WIN11MON_MASK_POLICY Policy);
 
 /*==========================================================================
  * Public API - Async Operations
@@ -465,9 +726,9 @@ WIN11MON_API HRESULT Win11MonSetMaskPolicy(_In_ HWIN11MON Handle,
  * @param[in]  PollIntervalMs - Polling interval in milliseconds
  * @returns    S_OK on success
  */
-WIN11MON_API HRESULT Win11MonStartEventMonitor(
-    _In_ HWIN11MON Handle, _In_ WIN11MON_EVENT_CALLBACK Callback,
-    _In_opt_ PVOID Context, _In_ DWORD PollIntervalMs);
+WIN11MON_API HRESULT Win11MonStartEventMonitor(_In_ HWIN11MON Handle,
+                                               _In_ WIN11MON_EVENT_CALLBACK Callback,
+                                               _In_opt_ PVOID Context, _In_ DWORD PollIntervalMs);
 
 /**
  * @function   Win11MonStopEventMonitor
@@ -487,7 +748,7 @@ WIN11MON_API HRESULT Win11MonStopEventMonitor(_In_ HWIN11MON Handle);
  * @param[in]  ErrorCode - HRESULT error code
  * @returns    Static string describing error
  */
-WIN11MON_API const WCHAR* Win11MonGetErrorMessage(_In_ HRESULT ErrorCode);
+WIN11MON_API const WCHAR *Win11MonGetErrorMessage(_In_ HRESULT ErrorCode);
 
 #ifdef __cplusplus
 }

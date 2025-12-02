@@ -23,63 +23,51 @@
 
 /*--------------------------------------------------------------------------
  * IOCTL Definitions (mirror from kernel win11_monitor_public.h)
+ * IMPORTANT: These must exactly match the kernel definitions!
  *-------------------------------------------------------------------------*/
 #define WIN11MON_IOCTL_BASE 0x800
 
-#define IOCTL_MONITOR_GET_VERSION                                            \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x01, METHOD_BUFFERED, \
-           FILE_READ_ACCESS)
-#define IOCTL_MONITOR_GET_CAPABILITIES                                       \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x02, METHOD_BUFFERED, \
-           FILE_READ_ACCESS)
-#define IOCTL_MONITOR_ENABLE                                                 \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x03, METHOD_BUFFERED, \
-           FILE_WRITE_ACCESS)
-#define IOCTL_MONITOR_DISABLE                                                \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x04, METHOD_BUFFERED, \
-           FILE_WRITE_ACCESS)
-#define IOCTL_MONITOR_GET_STATS                                              \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x05, METHOD_BUFFERED, \
-           FILE_READ_ACCESS)
-#define IOCTL_MONITOR_FETCH_EVENTS                                           \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x06, METHOD_BUFFERED, \
-           FILE_READ_ACCESS)
-#define IOCTL_MONITOR_SET_TELEMETRY                                          \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x07, METHOD_BUFFERED, \
-           FILE_WRITE_ACCESS)
-#define IOCTL_MONITOR_SET_ENCRYPTION                                         \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x08, METHOD_BUFFERED, \
-           FILE_WRITE_ACCESS)
-#define IOCTL_MONITOR_SCAN_NOW                                               \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x09, METHOD_BUFFERED, \
-           FILE_WRITE_ACCESS)
-#define IOCTL_MONITOR_PARSE_IOP_MC                                           \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x0A, METHOD_BUFFERED, \
-           FILE_READ_ACCESS | FILE_WRITE_ACCESS)
-#define IOCTL_MONITOR_GET_OFFSET_STATUS                                      \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x0B, METHOD_BUFFERED, \
-           FILE_READ_ACCESS)
-#define IOCTL_MONITOR_GET_IORING_HANDLES                                     \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x0C, METHOD_BUFFERED, \
-           FILE_READ_ACCESS)
-#define IOCTL_MONITOR_SET_MASK_POLICY                                        \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x0D, METHOD_BUFFERED, \
-           FILE_WRITE_ACCESS)
-#define IOCTL_MONITOR_GET_RATE_STATS                                         \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x0E, METHOD_BUFFERED, \
-           FILE_READ_ACCESS)
-#define IOCTL_MONITOR_RINGBUF_CONFIGURE                                      \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x10, METHOD_BUFFERED, \
-           FILE_WRITE_ACCESS)
-#define IOCTL_MONITOR_RINGBUF_SNAPSHOT                                       \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x11, METHOD_BUFFERED, \
-           FILE_READ_ACCESS)
-#define IOCTL_MONITOR_RINGBUF_GET_STATS                                      \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x12, METHOD_BUFFERED, \
-           FILE_READ_ACCESS)
-#define IOCTL_MONITOR_RINGBUF_CLEAR                                          \
-  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x13, METHOD_BUFFERED, \
-           FILE_WRITE_ACCESS)
+/* Core IOCTLs (0x00-0x09) */
+#define IOCTL_MONITOR_GET_VERSION \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x00, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MONITOR_GET_CAPABILITIES \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x01, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MONITOR_ENABLE \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x02, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define IOCTL_MONITOR_DISABLE \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x03, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define IOCTL_MONITOR_GET_STATS \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x04, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MONITOR_FETCH_EVENTS \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x05, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MONITOR_SET_TELEMETRY \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x06, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define IOCTL_MONITOR_SET_ENCRYPTION \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x07, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define IOCTL_MONITOR_SCAN_NOW \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x08, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define IOCTL_MONITOR_PARSE_IOP_MC \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x09, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+/* Enhancement IOCTLs (0x0A-0x0E) */
+#define IOCTL_MONITOR_GET_IORING_HANDLES \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x0A, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MONITOR_GET_OFFSET_STATUS \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x0C, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MONITOR_SET_MASK_POLICY \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x0D, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define IOCTL_MONITOR_GET_RATE_STATS \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x0E, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+/* Ring Buffer IOCTLs (0x10-0x13) */
+#define IOCTL_MONITOR_RINGBUF_CONFIGURE \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x10, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define IOCTL_MONITOR_RINGBUF_SNAPSHOT \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x11, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MONITOR_RINGBUF_GET_STATS \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x12, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MONITOR_RINGBUF_CLEAR \
+  CTL_CODE(FILE_DEVICE_UNKNOWN, WIN11MON_IOCTL_BASE + 0x13, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 
 /*--------------------------------------------------------------------------
  * Device Path
@@ -105,13 +93,12 @@ typedef struct _WIN11MON_HANDLE {
 /*--------------------------------------------------------------------------
  * Internal IOCTL Helper
  *-------------------------------------------------------------------------*/
-static HRESULT SendIoctl(HANDLE Device, DWORD IoctlCode, PVOID InBuffer,
-                         DWORD InSize, PVOID OutBuffer, DWORD OutSize,
-                         DWORD* BytesReturned) {
+static HRESULT SendIoctl(HANDLE Device, DWORD IoctlCode, PVOID InBuffer, DWORD InSize,
+                         PVOID OutBuffer, DWORD OutSize, DWORD *BytesReturned) {
   DWORD returned = 0;
 
-  BOOL success = DeviceIoControl(Device, IoctlCode, InBuffer, InSize, OutBuffer,
-                                 OutSize, &returned, NULL);
+  BOOL success =
+      DeviceIoControl(Device, IoctlCode, InBuffer, InSize, OutBuffer, OutSize, &returned, NULL);
 
   if (BytesReturned) {
     *BytesReturned = returned;
@@ -120,19 +107,19 @@ static HRESULT SendIoctl(HANDLE Device, DWORD IoctlCode, PVOID InBuffer,
   if (!success) {
     DWORD error = GetLastError();
     switch (error) {
-      case ERROR_FILE_NOT_FOUND:
-        return WIN11MON_E_DRIVER_NOT_FOUND;
-      case ERROR_ACCESS_DENIED:
-        return WIN11MON_E_ACCESS_DENIED;
-      case ERROR_INSUFFICIENT_BUFFER:
-      case ERROR_MORE_DATA:
-        return WIN11MON_E_BUFFER_TOO_SMALL;
-      case ERROR_NOT_SUPPORTED:
-        return WIN11MON_E_NOT_SUPPORTED;
-      case ERROR_NO_MORE_ITEMS:
-        return WIN11MON_E_NO_MORE_EVENTS;
-      default:
-        return HRESULT_FROM_WIN32(error);
+    case ERROR_FILE_NOT_FOUND:
+      return WIN11MON_E_DRIVER_NOT_FOUND;
+    case ERROR_ACCESS_DENIED:
+      return WIN11MON_E_ACCESS_DENIED;
+    case ERROR_INSUFFICIENT_BUFFER:
+    case ERROR_MORE_DATA:
+      return WIN11MON_E_BUFFER_TOO_SMALL;
+    case ERROR_NOT_SUPPORTED:
+      return WIN11MON_E_NOT_SUPPORTED;
+    case ERROR_NO_MORE_ITEMS:
+      return WIN11MON_E_NO_MORE_EVENTS;
+    default:
+      return HRESULT_FROM_WIN32(error);
     }
   }
 
@@ -145,8 +132,7 @@ static HRESULT SendIoctl(HANDLE Device, DWORD IoctlCode, PVOID InBuffer,
 
 WIN11MON_API BOOL Win11MonIsAvailable(VOID) {
   HANDLE hDevice = CreateFileW(WIN11MON_DEVICE_PATH, GENERIC_READ,
-                               FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-                               OPEN_EXISTING, 0, NULL);
+                               FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 
   if (hDevice == INVALID_HANDLE_VALUE) {
     return FALSE;
@@ -156,7 +142,7 @@ WIN11MON_API BOOL Win11MonIsAvailable(VOID) {
   return TRUE;
 }
 
-WIN11MON_API HRESULT Win11MonOpen(HWIN11MON* Handle) {
+WIN11MON_API HRESULT Win11MonOpen(HWIN11MON *Handle) {
   if (Handle == NULL) {
     return E_INVALIDARG;
   }
@@ -164,9 +150,8 @@ WIN11MON_API HRESULT Win11MonOpen(HWIN11MON* Handle) {
   *Handle = NULL;
 
   /* Open device */
-  HANDLE hDevice = CreateFileW(
-      WIN11MON_DEVICE_PATH, GENERIC_READ | GENERIC_WRITE,
-      FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+  HANDLE hDevice = CreateFileW(WIN11MON_DEVICE_PATH, GENERIC_READ | GENERIC_WRITE,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 
   if (hDevice == INVALID_HANDLE_VALUE) {
     DWORD error = GetLastError();
@@ -180,7 +165,7 @@ WIN11MON_API HRESULT Win11MonOpen(HWIN11MON* Handle) {
   }
 
   /* Allocate handle structure */
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)HeapAlloc(
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)HeapAlloc(
       GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(WIN11MON_HANDLE_INTERNAL));
 
   if (pHandle == NULL) {
@@ -193,8 +178,8 @@ WIN11MON_API HRESULT Win11MonOpen(HWIN11MON* Handle) {
 
   /* Query version */
   DWORD versionPacked = 0;
-  HRESULT hr = SendIoctl(hDevice, IOCTL_MONITOR_GET_VERSION, NULL, 0,
-                         &versionPacked, sizeof(versionPacked), NULL);
+  HRESULT hr = SendIoctl(hDevice, IOCTL_MONITOR_GET_VERSION, NULL, 0, &versionPacked,
+                         sizeof(versionPacked), NULL);
 
   if (SUCCEEDED(hr)) {
     pHandle->Version.Major = (versionPacked >> 24) & 0xFF;
@@ -203,8 +188,8 @@ WIN11MON_API HRESULT Win11MonOpen(HWIN11MON* Handle) {
   }
 
   /* Query capabilities */
-  hr = SendIoctl(hDevice, IOCTL_MONITOR_GET_CAPABILITIES, NULL, 0,
-                 &pHandle->Capabilities, sizeof(pHandle->Capabilities), NULL);
+  hr = SendIoctl(hDevice, IOCTL_MONITOR_GET_CAPABILITIES, NULL, 0, &pHandle->Capabilities,
+                 sizeof(pHandle->Capabilities), NULL);
 
   if (SUCCEEDED(hr)) {
     pHandle->Version.Capabilities = pHandle->Capabilities;
@@ -219,7 +204,7 @@ WIN11MON_API VOID Win11MonClose(HWIN11MON Handle) {
     return;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
   /* Stop async monitoring if active */
   if (pHandle->AsyncActive) {
@@ -240,24 +225,22 @@ WIN11MON_API VOID Win11MonClose(HWIN11MON Handle) {
  * Version and Capabilities
  *=========================================================================*/
 
-WIN11MON_API HRESULT Win11MonGetVersion(HWIN11MON Handle,
-                                        PWIN11MON_VERSION Version) {
+WIN11MON_API HRESULT Win11MonGetVersion(HWIN11MON Handle, PWIN11MON_VERSION Version) {
   if (Handle == NULL || Version == NULL) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
   *Version = pHandle->Version;
   return S_OK;
 }
 
-WIN11MON_API BOOL Win11MonHasCapability(HWIN11MON Handle,
-                                        DWORD CapabilityFlag) {
+WIN11MON_API BOOL Win11MonHasCapability(HWIN11MON Handle, DWORD CapabilityFlag) {
   if (Handle == NULL) {
     return FALSE;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
   return (pHandle->Capabilities & CapabilityFlag) != 0;
 }
 
@@ -265,8 +248,7 @@ WIN11MON_API BOOL Win11MonHasCapability(HWIN11MON Handle,
  * Monitoring Control
  *=========================================================================*/
 
-WIN11MON_API HRESULT Win11MonEnable(HWIN11MON Handle,
-                                    const WIN11MON_CONFIG* Config) {
+WIN11MON_API HRESULT Win11MonEnable(HWIN11MON Handle, const WIN11MON_CONFIG *Config) {
   if (Handle == NULL || Config == NULL) {
     return E_INVALIDARG;
   }
@@ -275,7 +257,7 @@ WIN11MON_API HRESULT Win11MonEnable(HWIN11MON Handle,
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
   /* Build kernel MONITOR_SETTINGS structure */
   struct {
@@ -293,8 +275,8 @@ WIN11MON_API HRESULT Win11MonEnable(HWIN11MON Handle,
   settings.EnableEncryption = Config->EnableEncryption ? 1 : 0;
   settings.RateLimitPerSec = Config->RateLimitPerSec;
 
-  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_ENABLE, &settings,
-                   sizeof(settings), NULL, 0, NULL);
+  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_ENABLE, &settings, sizeof(settings), NULL,
+                   0, NULL);
 }
 
 WIN11MON_API HRESULT Win11MonDisable(HWIN11MON Handle) {
@@ -302,10 +284,9 @@ WIN11MON_API HRESULT Win11MonDisable(HWIN11MON Handle) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
-  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_DISABLE, NULL, 0, NULL,
-                   0, NULL);
+  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_DISABLE, NULL, 0, NULL, 0, NULL);
 }
 
 WIN11MON_API HRESULT Win11MonTriggerScan(HWIN11MON Handle) {
@@ -313,10 +294,9 @@ WIN11MON_API HRESULT Win11MonTriggerScan(HWIN11MON Handle) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
-  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_SCAN_NOW, NULL, 0, NULL,
-                   0, NULL);
+  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_SCAN_NOW, NULL, 0, NULL, 0, NULL);
 }
 
 /*==========================================================================
@@ -328,7 +308,7 @@ WIN11MON_API HRESULT Win11MonGetStats(HWIN11MON Handle, PWIN11MON_STATS Stats) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
   /* Kernel structure layout */
   struct {
@@ -343,8 +323,8 @@ WIN11MON_API HRESULT Win11MonGetStats(HWIN11MON Handle, PWIN11MON_STATS Stats) {
     DWORD CurrentRateLimit;
   } kernelStats = {0};
 
-  HRESULT hr = SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_GET_STATS, NULL,
-                         0, &kernelStats, sizeof(kernelStats), NULL);
+  HRESULT hr = SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_GET_STATS, NULL, 0, &kernelStats,
+                         sizeof(kernelStats), NULL);
 
   if (SUCCEEDED(hr)) {
     Stats->Size = sizeof(WIN11MON_STATS);
@@ -361,38 +341,35 @@ WIN11MON_API HRESULT Win11MonGetStats(HWIN11MON Handle, PWIN11MON_STATS Stats) {
   return hr;
 }
 
-WIN11MON_API HRESULT Win11MonGetRateStats(HWIN11MON Handle,
-                                          PWIN11MON_RATE_STATS Stats) {
+WIN11MON_API HRESULT Win11MonGetRateStats(HWIN11MON Handle, PWIN11MON_RATE_STATS Stats) {
   if (Handle == NULL || Stats == NULL) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
   /* Kernel structure - same layout as WIN11MON_RATE_STATS */
-  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_GET_RATE_STATS, NULL, 0,
-                   Stats, sizeof(WIN11MON_RATE_STATS), NULL);
+  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_GET_RATE_STATS, NULL, 0, Stats,
+                   sizeof(WIN11MON_RATE_STATS), NULL);
 }
 
 /*==========================================================================
  * Event Fetching
  *=========================================================================*/
 
-WIN11MON_API HRESULT Win11MonFetchEvents(HWIN11MON Handle, PVOID Buffer,
-                                         DWORD BufferSize, DWORD* BytesFetched,
-                                         DWORD* EventCount) {
-  if (Handle == NULL || Buffer == NULL || BytesFetched == NULL ||
-      EventCount == NULL) {
+WIN11MON_API HRESULT Win11MonFetchEvents(HWIN11MON Handle, PVOID Buffer, DWORD BufferSize,
+                                         DWORD *BytesFetched, DWORD *EventCount) {
+  if (Handle == NULL || Buffer == NULL || BytesFetched == NULL || EventCount == NULL) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
   *BytesFetched = 0;
   *EventCount = 0;
 
-  HRESULT hr = SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_FETCH_EVENTS,
-                         NULL, 0, Buffer, BufferSize, BytesFetched);
+  HRESULT hr = SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_FETCH_EVENTS, NULL, 0, Buffer,
+                         BufferSize, BytesFetched);
 
   if (SUCCEEDED(hr) && *BytesFetched > 0) {
     *EventCount = 1; /* SLIST fetch returns one event at a time */
@@ -405,16 +382,13 @@ WIN11MON_API HRESULT Win11MonFetchEvents(HWIN11MON Handle, PVOID Buffer,
  * IoRing Enumeration
  *=========================================================================*/
 
-WIN11MON_API HRESULT Win11MonEnumerateIoRings(HWIN11MON Handle,
-                                              PWIN11MON_IORING_INFO Buffer,
-                                              DWORD MaxEntries,
-                                              DWORD* EntriesFound) {
-  if (Handle == NULL || Buffer == NULL || EntriesFound == NULL ||
-      MaxEntries == 0) {
+WIN11MON_API HRESULT Win11MonEnumerateIoRings(HWIN11MON Handle, PWIN11MON_IORING_INFO Buffer,
+                                              DWORD MaxEntries, DWORD *EntriesFound) {
+  if (Handle == NULL || Buffer == NULL || EntriesFound == NULL || MaxEntries == 0) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
   *EntriesFound = 0;
 
@@ -423,18 +397,17 @@ WIN11MON_API HRESULT Win11MonEnumerateIoRings(HWIN11MON Handle,
   DWORD entrySize = sizeof(WIN11MON_IORING_INFO);
   DWORD totalSize = headerSize + (MaxEntries * entrySize);
 
-  BYTE* outBuffer = (BYTE*)HeapAlloc(GetProcessHeap(), 0, totalSize);
+  BYTE *outBuffer = (BYTE *)HeapAlloc(GetProcessHeap(), 0, totalSize);
   if (outBuffer == NULL) {
     return E_OUTOFMEMORY;
   }
 
   DWORD bytesReturned = 0;
-  HRESULT hr =
-      SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_GET_IORING_HANDLES, NULL,
-                0, outBuffer, totalSize, &bytesReturned);
+  HRESULT hr = SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_GET_IORING_HANDLES, NULL, 0,
+                         outBuffer, totalSize, &bytesReturned);
 
   if (SUCCEEDED(hr) && bytesReturned >= headerSize) {
-    DWORD* header = (DWORD*)outBuffer;
+    DWORD *header = (DWORD *)outBuffer;
     DWORD handleCount = header[1];
 
     if (handleCount > MaxEntries) {
@@ -456,29 +429,27 @@ WIN11MON_API HRESULT Win11MonEnumerateIoRings(HWIN11MON Handle,
  * Ring Buffer
  *=========================================================================*/
 
-WIN11MON_API HRESULT Win11MonGetRingBufferStats(HWIN11MON Handle,
-                                                PWIN11MON_RINGBUF_STATS Stats) {
+WIN11MON_API HRESULT Win11MonGetRingBufferStats(HWIN11MON Handle, PWIN11MON_RINGBUF_STATS Stats) {
   if (Handle == NULL || Stats == NULL) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
-  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_RINGBUF_GET_STATS, NULL,
-                   0, Stats, sizeof(WIN11MON_RINGBUF_STATS), NULL);
+  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_RINGBUF_GET_STATS, NULL, 0, Stats,
+                   sizeof(WIN11MON_RINGBUF_STATS), NULL);
 }
 
-WIN11MON_API HRESULT Win11MonSnapshotRingBuffer(HWIN11MON Handle, PVOID Buffer,
-                                                DWORD BufferSize,
-                                                DWORD* BytesWritten) {
+WIN11MON_API HRESULT Win11MonSnapshotRingBuffer(HWIN11MON Handle, PVOID Buffer, DWORD BufferSize,
+                                                DWORD *BytesWritten) {
   if (Handle == NULL || Buffer == NULL || BytesWritten == NULL) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
-  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_RINGBUF_SNAPSHOT, NULL,
-                   0, Buffer, BufferSize, BytesWritten);
+  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_RINGBUF_SNAPSHOT, NULL, 0, Buffer,
+                   BufferSize, BytesWritten);
 }
 
 WIN11MON_API HRESULT Win11MonClearRingBuffer(HWIN11MON Handle) {
@@ -486,23 +457,21 @@ WIN11MON_API HRESULT Win11MonClearRingBuffer(HWIN11MON Handle) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
-  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_RINGBUF_CLEAR, NULL, 0,
-                   NULL, 0, NULL);
+  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_RINGBUF_CLEAR, NULL, 0, NULL, 0, NULL);
 }
 
 /*==========================================================================
  * Offset Status
  *=========================================================================*/
 
-WIN11MON_API HRESULT Win11MonGetOffsetStatus(HWIN11MON Handle,
-                                             PWIN11MON_OFFSET_STATUS Status) {
+WIN11MON_API HRESULT Win11MonGetOffsetStatus(HWIN11MON Handle, PWIN11MON_OFFSET_STATUS Status) {
   if (Handle == NULL || Status == NULL) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
   /* Kernel structure */
   struct {
@@ -516,8 +485,8 @@ WIN11MON_API HRESULT Win11MonGetOffsetStatus(HWIN11MON Handle,
     DWORD IopMcStructureSize;
   } kernelStatus = {0};
 
-  HRESULT hr = SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_GET_OFFSET_STATUS,
-                         NULL, 0, &kernelStatus, sizeof(kernelStatus), NULL);
+  HRESULT hr = SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_GET_OFFSET_STATUS, NULL, 0,
+                         &kernelStatus, sizeof(kernelStatus), NULL);
 
   if (SUCCEEDED(hr)) {
     Status->Size = sizeof(WIN11MON_OFFSET_STATUS);
@@ -536,13 +505,12 @@ WIN11MON_API HRESULT Win11MonGetOffsetStatus(HWIN11MON Handle,
  * Configuration
  *=========================================================================*/
 
-WIN11MON_API HRESULT Win11MonSetMaskPolicy(HWIN11MON Handle,
-                                           WIN11MON_MASK_POLICY Policy) {
+WIN11MON_API HRESULT Win11MonSetMaskPolicy(HWIN11MON Handle, WIN11MON_MASK_POLICY Policy) {
   if (Handle == NULL) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
   struct {
     DWORD Size;
@@ -552,8 +520,8 @@ WIN11MON_API HRESULT Win11MonSetMaskPolicy(HWIN11MON Handle,
   input.Size = sizeof(input);
   input.Policy = (DWORD)Policy;
 
-  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_SET_MASK_POLICY, &input,
-                   sizeof(input), NULL, 0, NULL);
+  return SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_SET_MASK_POLICY, &input, sizeof(input),
+                   NULL, 0, NULL);
 }
 
 /*==========================================================================
@@ -561,16 +529,15 @@ WIN11MON_API HRESULT Win11MonSetMaskPolicy(HWIN11MON Handle,
  *=========================================================================*/
 
 static DWORD WINAPI AsyncEventThread(LPVOID lpParam) {
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)lpParam;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)lpParam;
 
   BYTE eventBuffer[4096];
 
   while (!pHandle->AsyncStopFlag) {
     DWORD bytesReturned = 0;
 
-    HRESULT hr =
-        SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_FETCH_EVENTS, NULL, 0,
-                  eventBuffer, sizeof(eventBuffer), &bytesReturned);
+    HRESULT hr = SendIoctl(pHandle->DeviceHandle, IOCTL_MONITOR_FETCH_EVENTS, NULL, 0, eventBuffer,
+                           sizeof(eventBuffer), &bytesReturned);
 
     if (SUCCEEDED(hr) && bytesReturned > 0 && pHandle->AsyncCallback) {
       pHandle->AsyncCallback(pHandle->AsyncContext, eventBuffer, bytesReturned);
@@ -582,15 +549,13 @@ static DWORD WINAPI AsyncEventThread(LPVOID lpParam) {
   return 0;
 }
 
-WIN11MON_API HRESULT Win11MonStartEventMonitor(HWIN11MON Handle,
-                                               WIN11MON_EVENT_CALLBACK Callback,
-                                               PVOID Context,
-                                               DWORD PollIntervalMs) {
+WIN11MON_API HRESULT Win11MonStartEventMonitor(HWIN11MON Handle, WIN11MON_EVENT_CALLBACK Callback,
+                                               PVOID Context, DWORD PollIntervalMs) {
   if (Handle == NULL || Callback == NULL || PollIntervalMs == 0) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
   EnterCriticalSection(&pHandle->Lock);
 
@@ -604,8 +569,7 @@ WIN11MON_API HRESULT Win11MonStartEventMonitor(HWIN11MON Handle,
   pHandle->AsyncPollInterval = PollIntervalMs;
   pHandle->AsyncStopFlag = FALSE;
 
-  pHandle->AsyncThread =
-      CreateThread(NULL, 0, AsyncEventThread, pHandle, 0, NULL);
+  pHandle->AsyncThread = CreateThread(NULL, 0, AsyncEventThread, pHandle, 0, NULL);
 
   if (pHandle->AsyncThread == NULL) {
     LeaveCriticalSection(&pHandle->Lock);
@@ -623,7 +587,7 @@ WIN11MON_API HRESULT Win11MonStopEventMonitor(HWIN11MON Handle) {
     return E_INVALIDARG;
   }
 
-  WIN11MON_HANDLE_INTERNAL* pHandle = (WIN11MON_HANDLE_INTERNAL*)Handle;
+  WIN11MON_HANDLE_INTERNAL *pHandle = (WIN11MON_HANDLE_INTERNAL *)Handle;
 
   EnterCriticalSection(&pHandle->Lock);
 
@@ -656,31 +620,31 @@ WIN11MON_API HRESULT Win11MonStopEventMonitor(HWIN11MON Handle) {
  * Error Handling
  *=========================================================================*/
 
-WIN11MON_API const WCHAR* Win11MonGetErrorMessage(HRESULT ErrorCode) {
+WIN11MON_API const WCHAR *Win11MonGetErrorMessage(HRESULT ErrorCode) {
   switch (ErrorCode) {
-    case S_OK:
-      return L"Success";
-    case WIN11MON_E_DRIVER_NOT_FOUND:
-      return L"Win11 Monitor driver not found or not loaded";
-    case WIN11MON_E_VERSION_MISMATCH:
-      return L"Driver version mismatch";
-    case WIN11MON_E_ACCESS_DENIED:
-      return L"Access denied - administrator privileges required";
-    case WIN11MON_E_INVALID_HANDLE:
-      return L"Invalid handle";
-    case WIN11MON_E_BUFFER_TOO_SMALL:
-      return L"Buffer too small";
-    case WIN11MON_E_NOT_SUPPORTED:
-      return L"Operation not supported";
-    case WIN11MON_E_NO_MORE_EVENTS:
-      return L"No more events available";
-    case WIN11MON_E_ASYNC_PENDING:
-      return L"Async operation already in progress";
-    case E_INVALIDARG:
-      return L"Invalid argument";
-    case E_OUTOFMEMORY:
-      return L"Out of memory";
-    default:
-      return L"Unknown error";
+  case S_OK:
+    return L"Success";
+  case WIN11MON_E_DRIVER_NOT_FOUND:
+    return L"Win11 Monitor driver not found or not loaded";
+  case WIN11MON_E_VERSION_MISMATCH:
+    return L"Driver version mismatch";
+  case WIN11MON_E_ACCESS_DENIED:
+    return L"Access denied - administrator privileges required";
+  case WIN11MON_E_INVALID_HANDLE:
+    return L"Invalid handle";
+  case WIN11MON_E_BUFFER_TOO_SMALL:
+    return L"Buffer too small";
+  case WIN11MON_E_NOT_SUPPORTED:
+    return L"Operation not supported";
+  case WIN11MON_E_NO_MORE_EVENTS:
+    return L"No more events available";
+  case WIN11MON_E_ASYNC_PENDING:
+    return L"Async operation already in progress";
+  case E_INVALIDARG:
+    return L"Invalid argument";
+  case E_OUTOFMEMORY:
+    return L"Out of memory";
+  default:
+    return L"Unknown error";
   }
 }

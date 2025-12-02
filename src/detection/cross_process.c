@@ -33,6 +33,7 @@
 #include <ntstrsafe.h>
 
 #include "addr_mask.h"
+#include "mem_monitor.h" /* For MON_VAD_* structures */
 #include "telemetry_ringbuf.h"
 #include "win11_monitor_public.h"
 
@@ -621,11 +622,20 @@ _Use_decl_annotations_ NTSTATUS MonXpGetProcessIntegrity(ULONG ProcessId, ULONG 
 /* Public API - Scanning & Detection                                        */
 /*--------------------------------------------------------------------------*/
 
+/* Forward declaration for handle correlator */
+extern NTSTATUS MonHcCorrelateHandles(_Out_opt_ ULONG *SharedCount);
+
 /**
  * @function   MonXpScanNow
- * @purpose    Trigger immediate scan (stub - full impl in handle_correlator.c)
+ * @purpose    Trigger immediate cross-process detection scan
+ * @precondition IRQL == PASSIVE_LEVEL, subsystem initialized
+ * @postcondition Handle correlation complete, alerts emitted for suspicious sharing
+ * @returns    STATUS_SUCCESS on completion, STATUS_NOT_SUPPORTED if not initialized
  */
 _Use_decl_annotations_ NTSTATUS MonXpScanNow(VOID) {
+  NTSTATUS status;
+  ULONG sharedCount = 0;
+
   if (!MonXpIsInitialized()) {
     return STATUS_NOT_SUPPORTED;
   }
@@ -637,13 +647,19 @@ _Use_decl_annotations_ NTSTATUS MonXpScanNow(VOID) {
   InterlockedIncrement(&g_XpState.TotalScans);
   g_XpState.LastScanTime = KeQueryInterruptTime();
 
-  /* Full implementation delegated to handle_correlator.c */
-  /* extern NTSTATUS MonHcCorrelateHandles(VOID); */
-  /* return MonHcCorrelateHandles(); */
+  /* Execute handle correlation scan */
+  status = MonHcCorrelateHandles(&sharedCount);
 
-  DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL, "[WIN11MON] Cross-process scan triggered\n");
+  if (NT_SUCCESS(status)) {
+    InterlockedAdd(&g_XpState.TotalSharedObjectsDetected, (LONG)sharedCount);
+    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_TRACE_LEVEL,
+               "[WIN11MON] Cross-process scan complete: %lu shared objects\n", sharedCount);
+  } else {
+    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_WARNING_LEVEL,
+               "[WIN11MON] Cross-process scan failed: 0x%08X\n", status);
+  }
 
-  return STATUS_SUCCESS;
+  return status;
 }
 
 /**
@@ -755,43 +771,139 @@ _Use_decl_annotations_ NTSTATUS MonXpGetProcessTree(PMON_XP_PROCESS_ENTRY *Entri
 
 /**
  * @function   MonXpGetAlerts
- * @purpose    Get pending alerts (allocates output array)
+ * @purpose    Get pending cross-process alerts
+ * @precondition IRQL == PASSIVE_LEVEL
+ *
+ * @note       ARCHITECTURAL DESIGN DECISION:
+ *             Cross-process alerts are NOT buffered separately. All alerts
+ *             are routed through the unified ring buffer telemetry system
+ *             (telemetry_ringbuf.c) for consistent event handling.
+ *
+ *             To retrieve cross-process alerts, use:
+ *               MonRingBufReadEvents(MonEvent_CrossProcess, ...)
+ *
+ *             This function returns an empty array by design. The ring
+ *             buffer provides:
+ *             - Lock-free event queuing at DISPATCH_LEVEL
+ *             - Unified event filtering and deduplication
+ *             - Rate limiting integration
+ *             - ETW correlation for forensic analysis
+ *
+ * @returns    STATUS_SUCCESS (always returns empty array)
  */
 _Use_decl_annotations_ NTSTATUS MonXpGetAlerts(PMON_XP_ALERT_EVENT *Alerts, ULONG *Count) {
   if (Alerts == NULL || Count == NULL) {
     return STATUS_INVALID_PARAMETER;
   }
 
-  /* Alerts are routed through ring buffer (telemetry_ringbuf.c) */
-  /* This stub returns empty - use MonRingBufReadEvents for actual alerts */
+  /*
+   * Alerts flow: MonXpEmitAlert() -> MonRingBufWriteEvent(MonEvent_CrossProcess)
+   * Retrieval:   MonRingBufReadEvents(MonEvent_CrossProcess) via IOCTL
+   *
+   * This API returns empty by design - use ring buffer for alerts.
+   */
 
   *Alerts = NULL;
   *Count = 0;
   return STATUS_SUCCESS;
 }
 
+/* Forward declaration for VAD walker */
+extern NTSTATUS MonVadWalkTree(ULONG ProcessId, PVOID OutBuffer, ULONG OutLen, ULONG *BytesWritten);
+
 /**
  * @function   MonXpScanSections
- * @purpose    Enumerate section objects for a process (stub)
+ * @purpose    Enumerate section objects for a process using VAD walker
+ * @precondition IRQL == PASSIVE_LEVEL
+ * @postcondition Section array allocated (caller must free with MON_XP_TAG)
+ * @returns    STATUS_SUCCESS on success
  */
 _Use_decl_annotations_ NTSTATUS MonXpScanSections(HANDLE ProcessId, PMON_XP_SECTION_INFO *Sections,
                                                   ULONG *Count) {
-  UNREFERENCED_PARAMETER(ProcessId);
+  NTSTATUS status;
+  ULONG pid;
+  PMON_VAD_SCAN_RESULT vadResult = NULL;
+  PMON_VAD_INFO vadArray;
+  PMON_XP_SECTION_INFO sectionArray = NULL;
+  ULONG vadBufferSize;
+  ULONG bytesWritten = 0;
+  ULONG sectionCount = 0;
+  ULONG i;
 
   if (Sections == NULL || Count == NULL) {
     return STATUS_INVALID_PARAMETER;
   }
 
+  *Sections = NULL;
+  *Count = 0;
+
   if (!MonXpIsInitialized()) {
     return STATUS_NOT_SUPPORTED;
   }
 
-  /* Section enumeration requires VAD walking - integration with mem_monitor.c
-   */
-  /* This is a stub implementation */
+  pid = (ULONG)(ULONG_PTR)ProcessId;
+  if (pid == 0) {
+    return STATUS_INVALID_PARAMETER;
+  }
 
-  *Sections = NULL;
-  *Count = 0;
+  /* Allocate VAD scan result buffer */
+  vadBufferSize = sizeof(MON_VAD_SCAN_RESULT) + (MON_MAX_VAD_DETAILED * sizeof(MON_VAD_INFO));
+  vadResult = (PMON_VAD_SCAN_RESULT)ExAllocatePool2(POOL_FLAG_PAGED, vadBufferSize, MON_XP_TAG);
+  if (vadResult == NULL) {
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  /* Walk VAD tree */
+  status = MonVadWalkTree(pid, vadResult, vadBufferSize, &bytesWritten);
+  if (!NT_SUCCESS(status)) {
+    ExFreePoolWithTag(vadResult, MON_XP_TAG);
+    return status;
+  }
+
+  /* Count mapped sections */
+  vadArray = (PMON_VAD_INFO)((PUCHAR)vadResult + sizeof(MON_VAD_SCAN_RESULT));
+  for (i = 0; i < vadResult->DetailedInfoCount; i++) {
+    if (vadArray[i].VadType == MonVadType_Mapped) {
+      sectionCount++;
+    }
+  }
+
+  if (sectionCount == 0) {
+    ExFreePoolWithTag(vadResult, MON_XP_TAG);
+    return STATUS_SUCCESS;
+  }
+
+  /* Allocate output array */
+  sectionArray = (PMON_XP_SECTION_INFO)ExAllocatePool2(
+      POOL_FLAG_PAGED, sectionCount * sizeof(MON_XP_SECTION_INFO), MON_XP_TAG);
+  if (sectionArray == NULL) {
+    ExFreePoolWithTag(vadResult, MON_XP_TAG);
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  /* Convert VAD info to section info */
+  RtlZeroMemory(sectionArray, sectionCount * sizeof(MON_XP_SECTION_INFO));
+  sectionCount = 0;
+  for (i = 0; i < vadResult->DetailedInfoCount; i++) {
+    if (vadArray[i].VadType == MonVadType_Mapped) {
+      PMON_XP_SECTION_INFO sec = &sectionArray[sectionCount];
+      sec->SectionAddress = (PVOID)vadArray[i].StartAddress;
+      sec->SectionSize = vadArray[i].Size;
+      sec->Protection = vadArray[i].Protection;
+      sec->Flags = vadArray[i].IsWritable ? 0x1 : 0;
+      sec->Flags |= vadArray[i].IsExecutable ? 0x2 : 0;
+      sec->OwnerProcessId = (HANDLE)(ULONG_PTR)pid;
+      if (vadArray[i].HasFileBackingStore) {
+        RtlCopyMemory(sec->SectionName, vadArray[i].BackingFileName, sizeof(sec->SectionName));
+      }
+      sectionCount++;
+    }
+  }
+
+  ExFreePoolWithTag(vadResult, MON_XP_TAG);
+
+  *Sections = sectionArray;
+  *Count = sectionCount;
   return STATUS_SUCCESS;
 }
 

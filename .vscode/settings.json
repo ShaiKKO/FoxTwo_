@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "vector": "cpp"
+        "vector": "cpp",
+        "win11mon_profile.h": "c"
     }
 }
