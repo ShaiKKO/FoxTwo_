@@ -7,8 +7,9 @@
  * Version: 1.0
  * Date: 2025-12-01
  * Copyright:
- *   © 2025 ziX Performance Labs. All rights reserved. Proprietary and confidential.
- *   Redistribution or disclosure without prior written consent is prohibited.
+ *   © 2025 ziX Performance Labs. All rights reserved. Proprietary and
+ * confidential. Redistribution or disclosure without prior written consent is
+ * prohibited.
  *
  * Summary
  * -------
@@ -30,14 +31,15 @@
  * References:
  * - Linux kernel %p hashing: https://patchwork.kernel.org/patch/10031785/
  * - SipHash paper: https://131002.net/siphash/
- * - Windows KASLR hardening: https://windows-internals.com/kaslr-leaks-restriction/
+ * - Windows KASLR hardening:
+ * https://windows-internals.com/kaslr-leaks-restriction/
  */
 
 #ifndef _ZIX_LABS_ADDR_MASK_H_
 #define _ZIX_LABS_ADDR_MASK_H_
 
 #ifndef _KERNEL_MODE
-# error "This header is for kernel-mode only."
+#error "This header is for kernel-mode only."
 #endif
 
 #include <ntddk.h>
@@ -52,59 +54,59 @@ extern "C" {
  * Controls how kernel addresses are transformed before external exposure.
  *-------------------------------------------------------------------------*/
 typedef enum _MON_ADDRESS_MASK_POLICY {
-    /*
-     * MonMaskPolicy_None: No masking (DEBUG ONLY)
-     *
-     * Returns the full kernel address unchanged. This policy MUST NOT be
-     * used in production as it leaks kernel ASLR information.
-     *
-     * Use case: Development debugging, controlled test environments
-     */
-    MonMaskPolicy_None = 0,
+  /*
+   * MonMaskPolicy_None: No masking (DEBUG ONLY)
+   *
+   * Returns the full kernel address unchanged. This policy MUST NOT be
+   * used in production as it leaks kernel ASLR information.
+   *
+   * Use case: Development debugging, controlled test environments
+   */
+  MonMaskPolicy_None = 0,
 
-    /*
-     * MonMaskPolicy_Truncate: Bit truncation
-     *
-     * Preserves high 16 bits (pool region identifier), zeros lower 48 bits.
-     * Example: 0xFFFF8001'23456789 → 0xFFFF0000'00000000
-     *
-     * Properties:
-     * - Identifies kernel vs user addresses
-     * - Shows pool region (paged, nonpaged, session)
-     * - No correlation capability between events
-     *
-     * Use case: Minimal info for pool region analysis
-     */
-    MonMaskPolicy_Truncate = 1,
+  /*
+   * MonMaskPolicy_Truncate: Bit truncation
+   *
+   * Preserves high 16 bits (pool region identifier), zeros lower 48 bits.
+   * Example: 0xFFFF8001'23456789 → 0xFFFF0000'00000000
+   *
+   * Properties:
+   * - Identifies kernel vs user addresses
+   * - Shows pool region (paged, nonpaged, session)
+   * - No correlation capability between events
+   *
+   * Use case: Minimal info for pool region analysis
+   */
+  MonMaskPolicy_Truncate = 1,
 
-    /*
-     * MonMaskPolicy_Hash: SipHash-based transformation (DEFAULT)
-     *
-     * Uses SipHash-2-4 with a per-boot random 128-bit key to transform
-     * the address into a 64-bit hash. Same address always produces same
-     * hash within a boot session, allowing event correlation.
-     *
-     * Properties:
-     * - Deterministic within boot session
-     * - Different hash each boot (per-boot key)
-     * - Cannot reverse to original address
-     * - Allows correlation of events referencing same object
-     *
-     * Use case: Production telemetry (recommended default)
-     */
-    MonMaskPolicy_Hash = 2,
+  /*
+   * MonMaskPolicy_Hash: SipHash-based transformation (DEFAULT)
+   *
+   * Uses SipHash-2-4 with a per-boot random 128-bit key to transform
+   * the address into a 64-bit hash. Same address always produces same
+   * hash within a boot session, allowing event correlation.
+   *
+   * Properties:
+   * - Deterministic within boot session
+   * - Different hash each boot (per-boot key)
+   * - Cannot reverse to original address
+   * - Allows correlation of events referencing same object
+   *
+   * Use case: Production telemetry (recommended default)
+   */
+  MonMaskPolicy_Hash = 2,
 
-    /*
-     * MonMaskPolicy_Zero: Complete removal
-     *
-     * Returns 0 for all addresses. Maximum privacy but no correlation.
-     *
-     * Use case: High-security environments where even hashed addresses
-     *           are considered too risky
-     */
-    MonMaskPolicy_Zero = 3,
+  /*
+   * MonMaskPolicy_Zero: Complete removal
+   *
+   * Returns 0 for all addresses. Maximum privacy but no correlation.
+   *
+   * Use case: High-security environments where even hashed addresses
+   *           are considered too risky
+   */
+  MonMaskPolicy_Zero = 3,
 
-    MonMaskPolicy_Max
+  MonMaskPolicy_Max
 } MON_ADDRESS_MASK_POLICY;
 
 /*--------------------------------------------------------------------------
@@ -112,10 +114,10 @@ typedef enum _MON_ADDRESS_MASK_POLICY {
  *-------------------------------------------------------------------------*/
 
 /* Default policy for new driver instances */
-#define MON_MASK_DEFAULT_POLICY     MonMaskPolicy_Hash
+#define MON_MASK_DEFAULT_POLICY MonMaskPolicy_Hash
 
 /* Truncation preserves this many high bits */
-#define MON_MASK_TRUNCATE_BITS      16
+#define MON_MASK_TRUNCATE_BITS 16
 
 /*--------------------------------------------------------------------------
  * Public Function Prototypes
@@ -131,8 +133,7 @@ typedef enum _MON_ADDRESS_MASK_POLICY {
  * @returns    STATUS_SUCCESS if initialization succeeded
  *             STATUS_UNSUCCESSFUL if RNG failed
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS MonAddrMaskInitialize(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS MonAddrMaskInitialize(VOID);
 
 /**
  * @function   MonAddrMaskShutdown
@@ -142,8 +143,7 @@ NTSTATUS MonAddrMaskInitialize(VOID);
  * @thread-safety Single-threaded shutdown
  * @side-effects Zeros key material
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-VOID MonAddrMaskShutdown(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) VOID MonAddrMaskShutdown(VOID);
 
 /**
  * @function   MonAddrMaskSetPolicy
@@ -157,8 +157,8 @@ VOID MonAddrMaskShutdown(VOID);
  * @returns   STATUS_SUCCESS if policy set
  *            STATUS_INVALID_PARAMETER if policy out of range
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-NTSTATUS MonAddrMaskSetPolicy(_In_ MON_ADDRESS_MASK_POLICY Policy);
+_IRQL_requires_max_(DISPATCH_LEVEL) NTSTATUS
+    MonAddrMaskSetPolicy(_In_ MON_ADDRESS_MASK_POLICY Policy);
 
 /**
  * @function   MonAddrMaskGetPolicy
@@ -168,8 +168,7 @@ NTSTATUS MonAddrMaskSetPolicy(_In_ MON_ADDRESS_MASK_POLICY Policy);
  * @thread-safety Thread-safe (atomic read)
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-MON_ADDRESS_MASK_POLICY MonAddrMaskGetPolicy(VOID);
+_IRQL_requires_max_(DISPATCH_LEVEL) MON_ADDRESS_MASK_POLICY MonAddrMaskGetPolicy(VOID);
 
 /**
  * @function   MonMaskAddress
@@ -187,8 +186,7 @@ MON_ADDRESS_MASK_POLICY MonAddrMaskGetPolicy(VOID);
  * - MonMaskPolicy_Hash returns deterministic hash (same input → same output)
  * - NULL input always returns 0 regardless of policy
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-ULONG64 MonMaskAddress(_In_ ULONG64 Address);
+_IRQL_requires_max_(DISPATCH_LEVEL) ULONG64 MonMaskAddress(_In_ ULONG64 Address);
 
 /**
  * @function   MonMaskAddressWithPolicy
@@ -202,11 +200,8 @@ ULONG64 MonMaskAddress(_In_ ULONG64 Address);
  * @param[in] Policy - Policy to use (overrides global setting)
  * @returns   Masked address according to specified policy
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-ULONG64 MonMaskAddressWithPolicy(
-    _In_ ULONG64 Address,
-    _In_ MON_ADDRESS_MASK_POLICY Policy
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) ULONG64
+    MonMaskAddressWithPolicy(_In_ ULONG64 Address, _In_ MON_ADDRESS_MASK_POLICY Policy);
 
 /**
  * @function   MonMaskPointer
@@ -218,10 +213,8 @@ ULONG64 MonMaskAddressWithPolicy(
  * @param[in] Ptr - Pointer to mask
  * @returns   Masked pointer value
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-FORCEINLINE ULONG64 MonMaskPointer(_In_opt_ const VOID* Ptr)
-{
-    return MonMaskAddress((ULONG64)(ULONG_PTR)Ptr);
+_IRQL_requires_max_(DISPATCH_LEVEL) FORCEINLINE ULONG64 MonMaskPointer(_In_opt_ const VOID *Ptr) {
+  return MonMaskAddress((ULONG64)(ULONG_PTR)Ptr);
 }
 
 #ifdef __cplusplus

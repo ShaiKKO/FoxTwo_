@@ -29,7 +29,7 @@
 #define _ZIX_LABS_IORING_ENUM_H_
 
 #ifndef _KERNEL_MODE
-# error "This header is for kernel-mode only."
+#error "This header is for kernel-mode only."
 #endif
 
 #include <ntddk.h>
@@ -47,44 +47,44 @@ extern "C" {
  * SECURITY: These offsets are build-specific. Runtime validation required.
  *-------------------------------------------------------------------------*/
 
-#define IORING_OBJECT_SIZE_22H2         0xD0
-#define IORING_REGBUFFERSCOUNT_OFFSET   0xB0
-#define IORING_REGBUFFERS_OFFSET        0xB8
-#define IORING_REGFILESCOUNT_OFFSET     0xC0
-#define IORING_REGFILES_OFFSET          0xC8
+#define IORING_OBJECT_SIZE_22H2       0xD0
+#define IORING_REGBUFFERSCOUNT_OFFSET 0xB0
+#define IORING_REGBUFFERS_OFFSET      0xB8
+#define IORING_REGFILESCOUNT_OFFSET   0xC0
+#define IORING_REGFILES_OFFSET        0xC8
 
 /*--------------------------------------------------------------------------
  * Build-Specific Offset Table
  *-------------------------------------------------------------------------*/
 typedef struct _IORING_OFFSET_TABLE {
-    ULONG BuildNumber;
-    ULONG StructureSize;
-    ULONG RegBuffersCountOffset;
-    ULONG RegBuffersOffset;
-    ULONG RegFilesCountOffset;
-    ULONG RegFilesOffset;
+  ULONG BuildNumber;
+  ULONG StructureSize;
+  ULONG RegBuffersCountOffset;
+  ULONG RegBuffersOffset;
+  ULONG RegFilesCountOffset;
+  ULONG RegFilesOffset;
 } IORING_OFFSET_TABLE, *PIORING_OFFSET_TABLE;
 
 /*--------------------------------------------------------------------------
  * IoRing Type Resolution State
  *-------------------------------------------------------------------------*/
 typedef struct _MON_IORING_TYPE_INFO {
-    UCHAR   TypeIndex;          /* Resolved object type index */
-    USHORT  ObjectBodySize;     /* Expected: 0xD0 */
-    BOOLEAN Initialized;        /* TRUE after successful init */
-    ULONG   WindowsBuild;       /* Current OS build number */
+  UCHAR TypeIndex;       /* Resolved object type index */
+  USHORT ObjectBodySize; /* Expected: 0xD0 */
+  BOOLEAN Initialized;   /* TRUE after successful init */
+  ULONG WindowsBuild;    /* Current OS build number */
 } MON_IORING_TYPE_INFO, *PMON_IORING_TYPE_INFO;
 
 /*--------------------------------------------------------------------------
  * Handle Info Structure for Enumeration Output
  *-------------------------------------------------------------------------*/
 typedef struct _MON_IORING_HANDLE_INFO {
-    ULONG   ProcessId;
-    ULONG64 HandleValue;
-    ULONG64 ObjectAddress;      /* Masked per policy */
-    ULONG   AccessMask;
-    ULONG   RegBuffersCount;
-    ULONG   ViolationFlags;
+  ULONG ProcessId;
+  ULONG64 HandleValue;
+  ULONG64 ObjectAddress; /* Masked per policy */
+  ULONG AccessMask;
+  ULONG RegBuffersCount;
+  ULONG ViolationFlags;
 } MON_IORING_HANDLE_INFO, *PMON_IORING_HANDLE_INFO;
 
 /*--------------------------------------------------------------------------
@@ -92,13 +92,10 @@ typedef struct _MON_IORING_HANDLE_INFO {
  *
  * Returns TRUE to continue enumeration, FALSE to stop early.
  *-------------------------------------------------------------------------*/
-typedef BOOLEAN (NTAPI *PMON_IORING_CALLBACK)(
-    _In_ ULONG ProcessId,
-    _In_ HANDLE HandleValue,
-    _In_ PVOID ObjectAddress,       /* Kernel address of IORING_OBJECT */
-    _In_ ACCESS_MASK GrantedAccess,
-    _In_opt_ PVOID Context
-);
+typedef BOOLEAN(NTAPI *PMON_IORING_CALLBACK)(
+    _In_ ULONG ProcessId, _In_ HANDLE HandleValue,
+    _In_ PVOID ObjectAddress, /* Kernel address of IORING_OBJECT */
+    _In_ ACCESS_MASK GrantedAccess, _In_opt_ PVOID Context);
 
 /*--------------------------------------------------------------------------
  * Public Function Prototypes
@@ -117,8 +114,7 @@ typedef BOOLEAN (NTAPI *PMON_IORING_CALLBACK)(
  * @returns    STATUS_SUCCESS if initialization succeeded
  *             STATUS_NOT_SUPPORTED if IoRing type not found
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS MonIoRingEnumInitialize(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS MonIoRingEnumInitialize(VOID);
 
 /**
  * @function   MonIoRingEnumShutdown
@@ -128,8 +124,7 @@ NTSTATUS MonIoRingEnumInitialize(VOID);
  * @thread-safety Single-threaded shutdown
  * @side-effects None
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-VOID MonIoRingEnumShutdown(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) VOID MonIoRingEnumShutdown(VOID);
 
 /**
  * @function   MonEnumerateIoRingObjects
@@ -145,12 +140,8 @@ VOID MonIoRingEnumShutdown(VOID);
  *          STATUS_INSUFFICIENT_RESOURCES on allocation failure
  *          STATUS_NOT_SUPPORTED if type info not initialized
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS
-MonEnumerateIoRingObjects(
-    _In_ PMON_IORING_CALLBACK Callback,
-    _In_opt_ PVOID Context
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonEnumerateIoRingObjects(_In_ PMON_IORING_CALLBACK Callback, _In_opt_ PVOID Context);
 
 /**
  * @function   MonGetIoRingOffsets
@@ -160,8 +151,7 @@ MonEnumerateIoRingObjects(
  * @thread-safety Thread-safe read-only access
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-const IORING_OFFSET_TABLE* MonGetIoRingOffsets(VOID);
+_IRQL_requires_max_(DISPATCH_LEVEL) const IORING_OFFSET_TABLE *MonGetIoRingOffsets(VOID);
 
 /**
  * @function   MonGetIoRingTypeInfo
@@ -171,8 +161,7 @@ const IORING_OFFSET_TABLE* MonGetIoRingOffsets(VOID);
  * @thread-safety Thread-safe read-only access
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-const MON_IORING_TYPE_INFO* MonGetIoRingTypeInfo(VOID);
+_IRQL_requires_max_(DISPATCH_LEVEL) const MON_IORING_TYPE_INFO *MonGetIoRingTypeInfo(VOID);
 
 /**
  * @function   MonDetectWindowsBuild
@@ -182,8 +171,7 @@ const MON_IORING_TYPE_INFO* MonGetIoRingTypeInfo(VOID);
  * @thread-safety Thread-safe
  * @side-effects None
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-ULONG MonDetectWindowsBuild(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) ULONG MonDetectWindowsBuild(VOID);
 
 #ifdef __cplusplus
 } /* extern "C" */

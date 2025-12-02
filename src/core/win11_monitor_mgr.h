@@ -7,8 +7,9 @@
  * Version: 1.3
  * Date: 2025-12-01
  * Copyright:
- *   © 2025 ziX Performance Labs. All rights reserved. Proprietary and confidential.
- *   Redistribution or disclosure without prior written consent is prohibited.
+ *   © 2025 ziX Performance Labs. All rights reserved. Proprietary and
+ * confidential. Redistribution or disclosure without prior written consent is
+ * prohibited.
  *
  * Summary
  * -------
@@ -38,16 +39,16 @@
 #define _WIN11_MONITOR_MGR_PUBLIC_H_
 
 #ifndef _KERNEL_MODE
-# error "This header is for kernel-mode and privileged tooling only."
+#error "This header is for kernel-mode and privileged tooling only."
 #endif
 
 #include <ntddk.h>
+
 #include "win11_monitor_public.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /*--------------------------------------------------------------------------
  * IOCTL Contracts

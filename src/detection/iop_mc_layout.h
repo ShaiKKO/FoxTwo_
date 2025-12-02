@@ -5,23 +5,23 @@
  * and will be replaced by outputs from the mc_layout_gen tool.
  */
 
-#define IOP_MC_LAYOUT_BUILD_MAJOR        10
-#define IOP_MC_LAYOUT_BUILD_MINOR        0
-#define IOP_MC_LAYOUT_BUILD_NUMBER       22621
-#define IOP_MC_LAYOUT_BUILD_REVISION     0
+#define IOP_MC_LAYOUT_BUILD_MAJOR    10
+#define IOP_MC_LAYOUT_BUILD_MINOR    0
+#define IOP_MC_LAYOUT_BUILD_NUMBER   22621
+#define IOP_MC_LAYOUT_BUILD_REVISION 0
 
-#define IOP_MC_LAYOUT_ERA                "WIN11_ERA_226XX"
+#define IOP_MC_LAYOUT_ERA "WIN11_ERA_226XX"
 
-#define IOP_MC_BUFFER_ENTRY_SIZE         0x80u
+#define IOP_MC_BUFFER_ENTRY_SIZE 0x80u
 
-#define IOP_MC_FIELD_TYPE_OFFSET               0x0
-#define IOP_MC_FIELD_RESERVED_OFFSET           0x2
-#define IOP_MC_FIELD_SIZE_OFFSET               0x4
-#define IOP_MC_FIELD_REFERENCECOUNT_OFFSET     0x8
-#define IOP_MC_FIELD_FLAGS_OFFSET              0xC
-#define IOP_MC_FIELD_GLOBALDATALINK_OFFSET     0x10
-#define IOP_MC_FIELD_ADDRESS_OFFSET            0x20
-#define IOP_MC_FIELD_LENGTH_OFFSET             0x28
-#define IOP_MC_FIELD_ACCESSMODE_OFFSET         0x2C
-#define IOP_MC_FIELD_MDLREF_OFFSET             0x30
-#define IOP_MC_FIELD_MDL_OFFSET                0x38
+#define IOP_MC_FIELD_TYPE_OFFSET           0x0
+#define IOP_MC_FIELD_RESERVED_OFFSET       0x2
+#define IOP_MC_FIELD_SIZE_OFFSET           0x4
+#define IOP_MC_FIELD_REFERENCECOUNT_OFFSET 0x8
+#define IOP_MC_FIELD_FLAGS_OFFSET          0xC
+#define IOP_MC_FIELD_GLOBALDATALINK_OFFSET 0x10
+#define IOP_MC_FIELD_ADDRESS_OFFSET        0x20
+#define IOP_MC_FIELD_LENGTH_OFFSET         0x28
+#define IOP_MC_FIELD_ACCESSMODE_OFFSET     0x2C
+#define IOP_MC_FIELD_MDLREF_OFFSET         0x30
+#define IOP_MC_FIELD_MDL_OFFSET            0x38

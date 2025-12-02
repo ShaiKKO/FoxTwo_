@@ -7,8 +7,9 @@
  * Version: 1.0
  * Date: 2025-12-01
  * Copyright:
- *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and confidential.
- *   Redistribution or disclosure without prior written consent is prohibited.
+ *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and
+ * confidential. Redistribution or disclosure without prior written consent is
+ * prohibited.
  *
  * Summary
  * -------
@@ -33,43 +34,43 @@ extern "C" {
 /*--------------------------------------------------------------------------
  * Memory Monitoring Constants
  *-------------------------------------------------------------------------*/
-#define WIN11MON_MEM_MAX_VADS           256
-#define WIN11MON_MEM_MAX_MDLS           128
-#define WIN11MON_MEM_MAX_SHARED         64
+#define WIN11MON_MEM_MAX_VADS 256
+#define WIN11MON_MEM_MAX_MDLS 128
+#define WIN11MON_MEM_MAX_SHARED 64
 #define WIN11MON_MEM_ANOMALY_TYPE_COUNT 16
 
 /*--------------------------------------------------------------------------
  * VAD Type Enumeration
  *-------------------------------------------------------------------------*/
 typedef enum _WIN11MON_VAD_TYPE {
-    Win11MonVadType_Private = 0,
-    Win11MonVadType_Mapped = 1,
-    Win11MonVadType_Image = 2,
-    Win11MonVadType_Physical = 3,
-    Win11MonVadType_WriteWatch = 4,
-    Win11MonVadType_LargePages = 5,
-    Win11MonVadType_Rotate = 6,
-    Win11MonVadType_Unknown = 7
+  Win11MonVadType_Private = 0,
+  Win11MonVadType_Mapped = 1,
+  Win11MonVadType_Image = 2,
+  Win11MonVadType_Physical = 3,
+  Win11MonVadType_WriteWatch = 4,
+  Win11MonVadType_LargePages = 5,
+  Win11MonVadType_Rotate = 6,
+  Win11MonVadType_Unknown = 7
 } WIN11MON_VAD_TYPE;
 
 /*--------------------------------------------------------------------------
  * Memory Anomaly Types
  *-------------------------------------------------------------------------*/
 typedef enum _WIN11MON_MEM_ANOMALY {
-    Win11MonMemAnomaly_None = 0,
-    Win11MonMemAnomaly_ExecutableHeap = 1,
-    Win11MonMemAnomaly_WritableCode = 2,
-    Win11MonMemAnomaly_UnbackedExecutable = 3,
-    Win11MonMemAnomaly_HiddenRegion = 4,
-    Win11MonMemAnomaly_DoubleMapped = 5,
-    Win11MonMemAnomaly_CrossProcessSharing = 6,
-    Win11MonMemAnomaly_KernelAddressInUser = 7,
-    Win11MonMemAnomaly_GuardPageMissing = 8,
-    Win11MonMemAnomaly_SuspiciousProtection = 9,
-    Win11MonMemAnomaly_LargePrivateRegion = 10,
-    Win11MonMemAnomaly_RWXRegion = 11,
-    Win11MonMemAnomaly_MdlLocked = 12,
-    Win11MonMemAnomaly_Max = 13
+  Win11MonMemAnomaly_None = 0,
+  Win11MonMemAnomaly_ExecutableHeap = 1,
+  Win11MonMemAnomaly_WritableCode = 2,
+  Win11MonMemAnomaly_UnbackedExecutable = 3,
+  Win11MonMemAnomaly_HiddenRegion = 4,
+  Win11MonMemAnomaly_DoubleMapped = 5,
+  Win11MonMemAnomaly_CrossProcessSharing = 6,
+  Win11MonMemAnomaly_KernelAddressInUser = 7,
+  Win11MonMemAnomaly_GuardPageMissing = 8,
+  Win11MonMemAnomaly_SuspiciousProtection = 9,
+  Win11MonMemAnomaly_LargePrivateRegion = 10,
+  Win11MonMemAnomaly_RWXRegion = 11,
+  Win11MonMemAnomaly_MdlLocked = 12,
+  Win11MonMemAnomaly_Max = 13
 } WIN11MON_MEM_ANOMALY;
 
 /*--------------------------------------------------------------------------
@@ -77,18 +78,18 @@ typedef enum _WIN11MON_MEM_ANOMALY {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_VAD_INFO {
-    ULONG64     StartAddress;           /* Masked */
-    ULONG64     EndAddress;             /* Masked */
-    ULONG64     Size;
-    WIN11MON_VAD_TYPE VadType;
-    ULONG       Protection;
-    ULONG       InitialProtection;
-    BOOL        IsExecutable;
-    BOOL        IsWritable;
-    BOOL        IsPrivate;
-    BOOL        IsCommitted;
-    BOOL        HasFileBacking;
-    ULONG       AnomalyFlags;           /* Bitmask */
+  ULONG64 StartAddress; /* Masked */
+  ULONG64 EndAddress;   /* Masked */
+  ULONG64 Size;
+  WIN11MON_VAD_TYPE VadType;
+  ULONG Protection;
+  ULONG InitialProtection;
+  BOOL IsExecutable;
+  BOOL IsWritable;
+  BOOL IsPrivate;
+  BOOL IsCommitted;
+  BOOL HasFileBacking;
+  ULONG AnomalyFlags; /* Bitmask */
 } WIN11MON_VAD_INFO, *PWIN11MON_VAD_INFO;
 #pragma pack(pop)
 
@@ -97,21 +98,21 @@ typedef struct _WIN11MON_VAD_INFO {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_VAD_SCAN_RESULT {
-    ULONG       Size;
-    ULONG       ProcessId;
-    ULONG       VadCount;
-    ULONG       DetailedInfoCount;
-    ULONG64     TotalPrivateBytes;
-    ULONG64     TotalMappedBytes;
-    ULONG64     TotalExecutableBytes;
-    ULONG64     TotalCommittedBytes;
-    ULONG       SuspiciousVadCount;
-    ULONG       AnomalyFlags;
-    ULONG64     ScanStartTime;
-    ULONG64     ScanEndTime;
-    ULONG       ScanDurationUs;
-    ULONG       Reserved;
-    /* WIN11MON_VAD_INFO array follows if detailed */
+  ULONG Size;
+  ULONG ProcessId;
+  ULONG VadCount;
+  ULONG DetailedInfoCount;
+  ULONG64 TotalPrivateBytes;
+  ULONG64 TotalMappedBytes;
+  ULONG64 TotalExecutableBytes;
+  ULONG64 TotalCommittedBytes;
+  ULONG SuspiciousVadCount;
+  ULONG AnomalyFlags;
+  ULONG64 ScanStartTime;
+  ULONG64 ScanEndTime;
+  ULONG ScanDurationUs;
+  ULONG Reserved;
+  /* WIN11MON_VAD_INFO array follows if detailed */
 } WIN11MON_VAD_SCAN_RESULT, *PWIN11MON_VAD_SCAN_RESULT;
 #pragma pack(pop)
 
@@ -120,19 +121,19 @@ typedef struct _WIN11MON_VAD_SCAN_RESULT {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_MDL_INFO {
-    ULONG64     VirtualAddress;         /* Masked */
-    ULONG64     ByteCount;
-    ULONG64     ByteOffset;
-    ULONG       ProcessId;
-    ULONG       Flags;
-    ULONG       PageCount;
-    BOOL        IsLocked;
-    BOOL        IsMapped;
-    BOOL        IsNonPagedPool;
-    BYTE        Reserved1;
-    ULONG64     CreationTime;
-    ULONG       AnomalyFlags;
-    ULONG       Reserved2;
+  ULONG64 VirtualAddress; /* Masked */
+  ULONG64 ByteCount;
+  ULONG64 ByteOffset;
+  ULONG ProcessId;
+  ULONG Flags;
+  ULONG PageCount;
+  BOOL IsLocked;
+  BOOL IsMapped;
+  BOOL IsNonPagedPool;
+  BYTE Reserved1;
+  ULONG64 CreationTime;
+  ULONG AnomalyFlags;
+  ULONG Reserved2;
 } WIN11MON_MDL_INFO, *PWIN11MON_MDL_INFO;
 #pragma pack(pop)
 
@@ -141,15 +142,15 @@ typedef struct _WIN11MON_MDL_INFO {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_MDL_TRACKER_RESULT {
-    ULONG       Size;
-    ULONG       ProcessId;
-    ULONG       TrackedMdlCount;
-    ULONG       MaxMdlsReturned;
-    ULONG64     TotalLockedBytes;
-    ULONG64     TotalMappedBytes;
-    ULONG       SuspiciousMdlCount;
-    ULONG       Reserved;
-    /* WIN11MON_MDL_INFO array follows */
+  ULONG Size;
+  ULONG ProcessId;
+  ULONG TrackedMdlCount;
+  ULONG MaxMdlsReturned;
+  ULONG64 TotalLockedBytes;
+  ULONG64 TotalMappedBytes;
+  ULONG SuspiciousMdlCount;
+  ULONG Reserved;
+  /* WIN11MON_MDL_INFO array follows */
 } WIN11MON_MDL_TRACKER_RESULT, *PWIN11MON_MDL_TRACKER_RESULT;
 #pragma pack(pop)
 
@@ -158,18 +159,18 @@ typedef struct _WIN11MON_MDL_TRACKER_RESULT {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_PHYSICAL_SCAN_RESULT {
-    ULONG       Size;
-    ULONG       ProcessId;
-    ULONG64     TotalPhysicalBytes;
-    ULONG64     WorkingSetBytes;
-    ULONG       PageCount;
-    ULONG       SharedPageCount;
-    ULONG       PrivatePageCount;
-    ULONG       ModifiedPageCount;
-    ULONG       DoubleMappedCount;
-    ULONG       SuspiciousCount;
-    ULONG       AnomalyFlags;
-    ULONG       ScanDurationUs;
+  ULONG Size;
+  ULONG ProcessId;
+  ULONG64 TotalPhysicalBytes;
+  ULONG64 WorkingSetBytes;
+  ULONG PageCount;
+  ULONG SharedPageCount;
+  ULONG PrivatePageCount;
+  ULONG ModifiedPageCount;
+  ULONG DoubleMappedCount;
+  ULONG SuspiciousCount;
+  ULONG AnomalyFlags;
+  ULONG ScanDurationUs;
 } WIN11MON_PHYSICAL_SCAN_RESULT, *PWIN11MON_PHYSICAL_SCAN_RESULT;
 #pragma pack(pop)
 
@@ -178,14 +179,14 @@ typedef struct _WIN11MON_PHYSICAL_SCAN_RESULT {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_SHARED_REGION {
-    ULONG64     VirtualAddress;         /* Masked */
-    ULONG64     Size;
-    ULONG       ProcessIdOwner;
-    ULONG       ProcessIdSharer;
-    ULONG       ShareType;
-    BOOL        IsExecutable;
-    ULONG       AnomalyFlags;
-    ULONG       Reserved;
+  ULONG64 VirtualAddress; /* Masked */
+  ULONG64 Size;
+  ULONG ProcessIdOwner;
+  ULONG ProcessIdSharer;
+  ULONG ShareType;
+  BOOL IsExecutable;
+  ULONG AnomalyFlags;
+  ULONG Reserved;
 } WIN11MON_SHARED_REGION, *PWIN11MON_SHARED_REGION;
 #pragma pack(pop)
 
@@ -194,14 +195,14 @@ typedef struct _WIN11MON_SHARED_REGION {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_SHARING_SCAN_RESULT {
-    ULONG       Size;
-    ULONG       ProcessId;
-    ULONG       SharedRegionCount;
-    ULONG       SuspiciousShareCount;
-    ULONG64     TotalSharedBytes;
-    ULONG       CrossProcessShareCount;
-    ULONG       Reserved;
-    /* WIN11MON_SHARED_REGION array follows */
+  ULONG Size;
+  ULONG ProcessId;
+  ULONG SharedRegionCount;
+  ULONG SuspiciousShareCount;
+  ULONG64 TotalSharedBytes;
+  ULONG CrossProcessShareCount;
+  ULONG Reserved;
+  /* WIN11MON_SHARED_REGION array follows */
 } WIN11MON_SHARING_SCAN_RESULT, *PWIN11MON_SHARING_SCAN_RESULT;
 #pragma pack(pop)
 
@@ -210,19 +211,19 @@ typedef struct _WIN11MON_SHARING_SCAN_RESULT {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_MEM_STATS {
-    ULONG       Size;
-    ULONG       Reserved;
-    ULONG64     VadScansPerformed;
-    ULONG64     MdlScansPerformed;
-    ULONG64     PhysicalScansPerformed;
-    ULONG64     SharingScansPerformed;
-    ULONG64     TotalAnomaliesDetected;
-    ULONG       TrackedMdlCount;
-    ULONG       TrackedProcessCount;
-    ULONG64     TotalBytesScanned;
-    ULONG       AverageVadScanTimeUs;
-    ULONG       PeakVadScanTimeUs;
-    ULONG       AnomaliesByType[WIN11MON_MEM_ANOMALY_TYPE_COUNT];
+  ULONG Size;
+  ULONG Reserved;
+  ULONG64 VadScansPerformed;
+  ULONG64 MdlScansPerformed;
+  ULONG64 PhysicalScansPerformed;
+  ULONG64 SharingScansPerformed;
+  ULONG64 TotalAnomaliesDetected;
+  ULONG TrackedMdlCount;
+  ULONG TrackedProcessCount;
+  ULONG64 TotalBytesScanned;
+  ULONG AverageVadScanTimeUs;
+  ULONG PeakVadScanTimeUs;
+  ULONG AnomaliesByType[WIN11MON_MEM_ANOMALY_TYPE_COUNT];
 } WIN11MON_MEM_STATS, *PWIN11MON_MEM_STATS;
 #pragma pack(pop)
 
@@ -246,11 +247,8 @@ typedef struct _WIN11MON_MEM_STATS {
  */
 DWORD
 WINAPI
-Win11MonMemScanVad(
-    _In_ HANDLE hDevice,
-    _In_ DWORD ProcessId,
-    _Out_ PWIN11MON_VAD_SCAN_RESULT pResult
-);
+Win11MonMemScanVad(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
+                   _Out_ PWIN11MON_VAD_SCAN_RESULT pResult);
 
 /**
  * @function   Win11MonMemScanVadDetailed
@@ -270,13 +268,10 @@ Win11MonMemScanVad(
  */
 DWORD
 WINAPI
-Win11MonMemScanVadDetailed(
-    _In_ HANDLE hDevice,
-    _In_ DWORD ProcessId,
-    _Out_writes_bytes_to_(BufferSize, *pBytesWritten) PVOID pBuffer,
-    _In_ DWORD BufferSize,
-    _Out_ DWORD* pBytesWritten
-);
+Win11MonMemScanVadDetailed(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
+                           _Out_writes_bytes_to_(BufferSize, *pBytesWritten)
+                               PVOID pBuffer,
+                           _In_ DWORD BufferSize, _Out_ DWORD* pBytesWritten);
 
 /*==========================================================================
  * MDL Tracking APIs
@@ -299,13 +294,10 @@ Win11MonMemScanVadDetailed(
  */
 DWORD
 WINAPI
-Win11MonMemGetMdls(
-    _In_ HANDLE hDevice,
-    _In_ DWORD ProcessId,
-    _Out_writes_bytes_to_(BufferSize, *pBytesWritten) PVOID pBuffer,
-    _In_ DWORD BufferSize,
-    _Out_ DWORD* pBytesWritten
-);
+Win11MonMemGetMdls(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
+                   _Out_writes_bytes_to_(BufferSize, *pBytesWritten)
+                       PVOID pBuffer,
+                   _In_ DWORD BufferSize, _Out_ DWORD* pBytesWritten);
 
 /*==========================================================================
  * Physical Memory Analysis APIs
@@ -326,11 +318,8 @@ Win11MonMemGetMdls(
  */
 DWORD
 WINAPI
-Win11MonMemScanPhysical(
-    _In_ HANDLE hDevice,
-    _In_ DWORD ProcessId,
-    _Out_ PWIN11MON_PHYSICAL_SCAN_RESULT pResult
-);
+Win11MonMemScanPhysical(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
+                        _Out_ PWIN11MON_PHYSICAL_SCAN_RESULT pResult);
 
 /*==========================================================================
  * Shared Memory Detection APIs
@@ -354,13 +343,10 @@ Win11MonMemScanPhysical(
  */
 DWORD
 WINAPI
-Win11MonMemGetSharing(
-    _In_ HANDLE hDevice,
-    _In_ DWORD ProcessId,
-    _Out_writes_bytes_to_(BufferSize, *pBytesWritten) PVOID pBuffer,
-    _In_ DWORD BufferSize,
-    _Out_ DWORD* pBytesWritten
-);
+Win11MonMemGetSharing(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
+                      _Out_writes_bytes_to_(BufferSize, *pBytesWritten)
+                          PVOID pBuffer,
+                      _In_ DWORD BufferSize, _Out_ DWORD* pBytesWritten);
 
 /*==========================================================================
  * Statistics APIs
@@ -379,10 +365,7 @@ Win11MonMemGetSharing(
  */
 DWORD
 WINAPI
-Win11MonMemGetStats(
-    _In_ HANDLE hDevice,
-    _Out_ PWIN11MON_MEM_STATS pStats
-);
+Win11MonMemGetStats(_In_ HANDLE hDevice, _Out_ PWIN11MON_MEM_STATS pStats);
 
 /*==========================================================================
  * Helper Functions
@@ -395,11 +378,8 @@ Win11MonMemGetStats(
  * @param[in]  Anomaly - Anomaly type
  * @returns    Static string describing anomaly
  */
-const WCHAR*
-WINAPI
-Win11MonMemAnomalyToString(
-    _In_ WIN11MON_MEM_ANOMALY Anomaly
-);
+const WCHAR* WINAPI
+Win11MonMemAnomalyToString(_In_ WIN11MON_MEM_ANOMALY Anomaly);
 
 /**
  * @function   Win11MonMemVadTypeToString
@@ -408,11 +388,7 @@ Win11MonMemAnomalyToString(
  * @param[in]  VadType - VAD type
  * @returns    Static string describing VAD type
  */
-const WCHAR*
-WINAPI
-Win11MonMemVadTypeToString(
-    _In_ WIN11MON_VAD_TYPE VadType
-);
+const WCHAR* WINAPI Win11MonMemVadTypeToString(_In_ WIN11MON_VAD_TYPE VadType);
 
 /**
  * @function   Win11MonMemProtectionToString
@@ -425,11 +401,9 @@ Win11MonMemVadTypeToString(
  */
 DWORD
 WINAPI
-Win11MonMemProtectionToString(
-    _In_ ULONG Protection,
-    _Out_writes_z_(BufferSize) WCHAR* Buffer,
-    _In_ DWORD BufferSize
-);
+Win11MonMemProtectionToString(_In_ ULONG Protection,
+                              _Out_writes_z_(BufferSize) WCHAR* Buffer,
+                              _In_ DWORD BufferSize);
 
 #ifdef __cplusplus
 } /* extern "C" */

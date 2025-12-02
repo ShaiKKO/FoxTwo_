@@ -7,8 +7,9 @@
  * Version: 1.0
  * Date: 2025-11-30
  * Copyright:
- *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and confidential.
- *   Redistribution or disclosure without prior written consent is prohibited.
+ *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and
+ * confidential. Redistribution or disclosure without prior written consent is
+ * prohibited.
  *
  * Summary
  * -------
@@ -32,44 +33,44 @@ extern "C" {
 /*--------------------------------------------------------------------------
  * Profile Constants (mirror kernel definitions)
  *-------------------------------------------------------------------------*/
-#define WIN11MON_PROFILE_MAX_NAME       64
-#define WIN11MON_PROFILE_ML_VERSION     1
+#define WIN11MON_PROFILE_MAX_NAME 64
+#define WIN11MON_PROFILE_ML_VERSION 1
 
 /*--------------------------------------------------------------------------
  * Profile Flags
  *-------------------------------------------------------------------------*/
-#define WIN11MON_PROFILE_FLAG_ELEVATED       0x0001
-#define WIN11MON_PROFILE_FLAG_SERVICE        0x0002
+#define WIN11MON_PROFILE_FLAG_ELEVATED 0x0001
+#define WIN11MON_PROFILE_FLAG_SERVICE 0x0002
 #define WIN11MON_PROFILE_FLAG_NON_INTERACTIVE 0x0004
-#define WIN11MON_PROFILE_FLAG_SYSTEM         0x0008
-#define WIN11MON_PROFILE_FLAG_BLACKLISTED    0x0010
-#define WIN11MON_PROFILE_FLAG_WHITELISTED    0x0020
-#define WIN11MON_PROFILE_FLAG_EXPORTED       0x0040
+#define WIN11MON_PROFILE_FLAG_SYSTEM 0x0008
+#define WIN11MON_PROFILE_FLAG_BLACKLISTED 0x0010
+#define WIN11MON_PROFILE_FLAG_WHITELISTED 0x0020
+#define WIN11MON_PROFILE_FLAG_EXPORTED 0x0040
 
 /*--------------------------------------------------------------------------
  * Anomaly Rule IDs (mirror kernel definitions)
  *-------------------------------------------------------------------------*/
 typedef enum _WIN11MON_ANOMALY_RULE_ID {
-    Win11MonAnomalyRule_None = 0,
-    Win11MonAnomalyRule_HighOpsFrequency = 1,
-    Win11MonAnomalyRule_LargeBufferRegistration = 2,
-    Win11MonAnomalyRule_RapidHandleCreation = 3,
-    Win11MonAnomalyRule_ElevatedIoRingAbuse = 4,
-    Win11MonAnomalyRule_BurstPattern = 5,
-    Win11MonAnomalyRule_ConcurrentTargets = 6,
-    Win11MonAnomalyRule_ViolationAccumulation = 7,
-    Win11MonAnomalyRule_Max = 8
+  Win11MonAnomalyRule_None = 0,
+  Win11MonAnomalyRule_HighOpsFrequency = 1,
+  Win11MonAnomalyRule_LargeBufferRegistration = 2,
+  Win11MonAnomalyRule_RapidHandleCreation = 3,
+  Win11MonAnomalyRule_ElevatedIoRingAbuse = 4,
+  Win11MonAnomalyRule_BurstPattern = 5,
+  Win11MonAnomalyRule_ConcurrentTargets = 6,
+  Win11MonAnomalyRule_ViolationAccumulation = 7,
+  Win11MonAnomalyRule_Max = 8
 } WIN11MON_ANOMALY_RULE_ID;
 
 /*--------------------------------------------------------------------------
  * Anomaly Severity Levels
  *-------------------------------------------------------------------------*/
 typedef enum _WIN11MON_ANOMALY_SEVERITY {
-    Win11MonSeverity_Info = 0,
-    Win11MonSeverity_Low = 1,
-    Win11MonSeverity_Medium = 2,
-    Win11MonSeverity_High = 3,
-    Win11MonSeverity_Critical = 4
+  Win11MonSeverity_Info = 0,
+  Win11MonSeverity_Low = 1,
+  Win11MonSeverity_Medium = 2,
+  Win11MonSeverity_High = 3,
+  Win11MonSeverity_Critical = 4
 } WIN11MON_ANOMALY_SEVERITY;
 
 /*--------------------------------------------------------------------------
@@ -77,29 +78,29 @@ typedef enum _WIN11MON_ANOMALY_SEVERITY {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_PROFILE_SUMMARY {
-    ULONG       Size;
-    ULONG       ProcessId;
-    WCHAR       ProcessName[WIN11MON_PROFILE_MAX_NAME];
+  ULONG Size;
+  ULONG ProcessId;
+  WCHAR ProcessName[WIN11MON_PROFILE_MAX_NAME];
 
-    /* Key metrics */
-    ULONG       ActiveHandles;
-    ULONG64     TotalOperations;
-    ULONG       OpsPerSecond;
-    ULONG64     TotalMemoryBytes;
+  /* Key metrics */
+  ULONG ActiveHandles;
+  ULONG64 TotalOperations;
+  ULONG OpsPerSecond;
+  ULONG64 TotalMemoryBytes;
 
-    /* Anomaly info */
-    ULONG       AnomalyScore;           /* 0-100 */
-    ULONG       AnomalyEventCount;
-    ULONG       ViolationCount;
-    ULONG       TriggeredRules;         /* Bitmask */
+  /* Anomaly info */
+  ULONG AnomalyScore; /* 0-100 */
+  ULONG AnomalyEventCount;
+  ULONG ViolationCount;
+  ULONG TriggeredRules; /* Bitmask */
 
-    /* Timestamps */
-    ULONG64     FirstSeenTime;
-    ULONG64     LastActivityTime;
-    ULONG       ActiveDurationSec;
+  /* Timestamps */
+  ULONG64 FirstSeenTime;
+  ULONG64 LastActivityTime;
+  ULONG ActiveDurationSec;
 
-    /* Flags */
-    ULONG       Flags;
+  /* Flags */
+  ULONG Flags;
 
 } WIN11MON_PROFILE_SUMMARY, *PWIN11MON_PROFILE_SUMMARY;
 #pragma pack(pop)
@@ -109,35 +110,35 @@ typedef struct _WIN11MON_PROFILE_SUMMARY {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_ML_FEATURE_VECTOR {
-    ULONG       Size;
-    ULONG       Version;
-    ULONG       ProcessId;
-    ULONG       Reserved1;
-    ULONG64     Timestamp;
+  ULONG Size;
+  ULONG Version;
+  ULONG ProcessId;
+  ULONG Reserved1;
+  ULONG64 Timestamp;
 
-    /* Normalized features */
-    float       OpsPerSecond;
-    float       SubmitsPerMinute;
-    float       HandleCount;
-    float       AvgBufferSizeKB;
-    float       MaxBufferSizeMB;
-    float       TotalMemoryMB;
-    float       ReadWriteRatio;
-    float       RegisteredFiles;
-    float       ActiveDurationMin;
-    float       BurstFrequency;
-    float       ViolationRate;
-    float       ProcessAgeMin;
+  /* Normalized features */
+  float OpsPerSecond;
+  float SubmitsPerMinute;
+  float HandleCount;
+  float AvgBufferSizeKB;
+  float MaxBufferSizeMB;
+  float TotalMemoryMB;
+  float ReadWriteRatio;
+  float RegisteredFiles;
+  float ActiveDurationMin;
+  float BurstFrequency;
+  float ViolationRate;
+  float ProcessAgeMin;
 
-    /* Categorical features */
-    ULONG       ProcessElevation;
-    ULONG       ProcessInteractive;
-    ULONG       ProcessIsService;
-    ULONG       AnomalyScore;
+  /* Categorical features */
+  ULONG ProcessElevation;
+  ULONG ProcessInteractive;
+  ULONG ProcessIsService;
+  ULONG AnomalyScore;
 
-    /* Label */
-    ULONG       Label;
-    ULONG       Reserved2;
+  /* Label */
+  ULONG Label;
+  ULONG Reserved2;
 
 } WIN11MON_ML_FEATURE_VECTOR, *PWIN11MON_ML_FEATURE_VECTOR;
 #pragma pack(pop)
@@ -147,15 +148,15 @@ typedef struct _WIN11MON_ML_FEATURE_VECTOR {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_ANOMALY_RULE {
-    WIN11MON_ANOMALY_RULE_ID RuleId;
-    WCHAR       RuleName[32];
-    ULONG       Threshold;
-    ULONG       WindowSeconds;
-    WIN11MON_ANOMALY_SEVERITY Severity;
-    ULONG       ScoreImpact;
-    BOOL        Enabled;
-    BYTE        Reserved[3];
-    CHAR        MitreTechnique[16];
+  WIN11MON_ANOMALY_RULE_ID RuleId;
+  WCHAR RuleName[32];
+  ULONG Threshold;
+  ULONG WindowSeconds;
+  WIN11MON_ANOMALY_SEVERITY Severity;
+  ULONG ScoreImpact;
+  BOOL Enabled;
+  BYTE Reserved[3];
+  CHAR MitreTechnique[16];
 } WIN11MON_ANOMALY_RULE, *PWIN11MON_ANOMALY_RULE;
 #pragma pack(pop)
 
@@ -164,15 +165,15 @@ typedef struct _WIN11MON_ANOMALY_RULE {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_PROFILE_CONFIG {
-    ULONG       Size;
-    BOOL        Enabled;
-    BOOL        AutoExport;
-    BOOL        AutoBlacklist;
-    BYTE        Reserved1;
-    ULONG       AnomalyThreshold;       /* Score threshold for events (0-100) */
-    ULONG       BlacklistThreshold;     /* Score for auto-blacklist (0-100) */
-    ULONG       HistoryWindowSec;
-    ULONG       Reserved2;
+  ULONG Size;
+  BOOL Enabled;
+  BOOL AutoExport;
+  BOOL AutoBlacklist;
+  BYTE Reserved1;
+  ULONG AnomalyThreshold;   /* Score threshold for events (0-100) */
+  ULONG BlacklistThreshold; /* Score for auto-blacklist (0-100) */
+  ULONG HistoryWindowSec;
+  ULONG Reserved2;
 } WIN11MON_PROFILE_CONFIG, *PWIN11MON_PROFILE_CONFIG;
 #pragma pack(pop)
 
@@ -181,14 +182,14 @@ typedef struct _WIN11MON_PROFILE_CONFIG {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_PROFILE_STATS {
-    ULONG       Size;
-    ULONG       Reserved;
-    ULONG       ActiveProfiles;
-    ULONG       TotalProfilesCreated;
-    ULONG       TotalProfilesDestroyed;
-    ULONG       TotalAnomaliesDetected;
-    ULONG64     TotalUpdates;
-    ULONG64     TotalExports;
+  ULONG Size;
+  ULONG Reserved;
+  ULONG ActiveProfiles;
+  ULONG TotalProfilesCreated;
+  ULONG TotalProfilesDestroyed;
+  ULONG TotalAnomaliesDetected;
+  ULONG64 TotalUpdates;
+  ULONG64 TotalExports;
 } WIN11MON_PROFILE_STATS, *PWIN11MON_PROFILE_STATS;
 #pragma pack(pop)
 
@@ -197,12 +198,12 @@ typedef struct _WIN11MON_PROFILE_STATS {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_ANOMALY_STATS {
-    ULONG       Size;
-    ULONG       TotalRules;
-    ULONG       EnabledRules;
-    ULONG       TotalEvaluations;
-    ULONG       TotalMatches;
-    ULONG       Reserved;
+  ULONG Size;
+  ULONG TotalRules;
+  ULONG EnabledRules;
+  ULONG TotalEvaluations;
+  ULONG TotalMatches;
+  ULONG Reserved;
 } WIN11MON_ANOMALY_STATS, *PWIN11MON_ANOMALY_STATS;
 #pragma pack(pop)
 
@@ -226,11 +227,8 @@ typedef struct _WIN11MON_ANOMALY_STATS {
  */
 DWORD
 WINAPI
-Win11MonProfileGet(
-    _In_ HANDLE hDevice,
-    _In_ DWORD ProcessId,
-    _Out_ PWIN11MON_PROFILE_SUMMARY pSummary
-);
+Win11MonProfileGet(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
+                   _Out_ PWIN11MON_PROFILE_SUMMARY pSummary);
 
 /**
  * @function   Win11MonProfileList
@@ -248,12 +246,10 @@ Win11MonProfileGet(
  */
 DWORD
 WINAPI
-Win11MonProfileList(
-    _In_ HANDLE hDevice,
-    _Out_writes_to_(MaxCount, *pActualCount) PWIN11MON_PROFILE_SUMMARY pBuffer,
-    _In_ DWORD MaxCount,
-    _Out_ DWORD* pActualCount
-);
+Win11MonProfileList(_In_ HANDLE hDevice,
+                    _Out_writes_to_(MaxCount, *pActualCount)
+                        PWIN11MON_PROFILE_SUMMARY pBuffer,
+                    _In_ DWORD MaxCount, _Out_ DWORD* pActualCount);
 
 /**
  * @function   Win11MonProfileExportML
@@ -270,11 +266,8 @@ Win11MonProfileList(
  */
 DWORD
 WINAPI
-Win11MonProfileExportML(
-    _In_ HANDLE hDevice,
-    _In_ DWORD ProcessId,
-    _Out_ PWIN11MON_ML_FEATURE_VECTOR pFeatures
-);
+Win11MonProfileExportML(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
+                        _Out_ PWIN11MON_ML_FEATURE_VECTOR pFeatures);
 
 /**
  * @function   Win11MonProfileGetStats
@@ -289,10 +282,8 @@ Win11MonProfileExportML(
  */
 DWORD
 WINAPI
-Win11MonProfileGetStats(
-    _In_ HANDLE hDevice,
-    _Out_ PWIN11MON_PROFILE_STATS pStats
-);
+Win11MonProfileGetStats(_In_ HANDLE hDevice,
+                        _Out_ PWIN11MON_PROFILE_STATS pStats);
 
 /*==========================================================================
  * Profile Configuration APIs
@@ -311,10 +302,8 @@ Win11MonProfileGetStats(
  */
 DWORD
 WINAPI
-Win11MonProfileGetConfig(
-    _In_ HANDLE hDevice,
-    _Out_ PWIN11MON_PROFILE_CONFIG pConfig
-);
+Win11MonProfileGetConfig(_In_ HANDLE hDevice,
+                         _Out_ PWIN11MON_PROFILE_CONFIG pConfig);
 
 /**
  * @function   Win11MonProfileSetConfig
@@ -329,10 +318,8 @@ Win11MonProfileGetConfig(
  */
 DWORD
 WINAPI
-Win11MonProfileSetConfig(
-    _In_ HANDLE hDevice,
-    _In_ const WIN11MON_PROFILE_CONFIG* pConfig
-);
+Win11MonProfileSetConfig(_In_ HANDLE hDevice,
+                         _In_ const WIN11MON_PROFILE_CONFIG* pConfig);
 
 /**
  * @function   Win11MonProfileReset
@@ -346,9 +333,7 @@ Win11MonProfileSetConfig(
  */
 DWORD
 WINAPI
-Win11MonProfileReset(
-    _In_ HANDLE hDevice
-);
+Win11MonProfileReset(_In_ HANDLE hDevice);
 
 /*==========================================================================
  * Anomaly Rule APIs
@@ -369,12 +354,10 @@ Win11MonProfileReset(
  */
 DWORD
 WINAPI
-Win11MonAnomalyGetRules(
-    _In_ HANDLE hDevice,
-    _Out_writes_to_(MaxCount, *pActualCount) PWIN11MON_ANOMALY_RULE pBuffer,
-    _In_ DWORD MaxCount,
-    _Out_ DWORD* pActualCount
-);
+Win11MonAnomalyGetRules(_In_ HANDLE hDevice,
+                        _Out_writes_to_(MaxCount, *pActualCount)
+                            PWIN11MON_ANOMALY_RULE pBuffer,
+                        _In_ DWORD MaxCount, _Out_ DWORD* pActualCount);
 
 /**
  * @function   Win11MonAnomalySetThreshold
@@ -391,11 +374,9 @@ Win11MonAnomalyGetRules(
  */
 DWORD
 WINAPI
-Win11MonAnomalySetThreshold(
-    _In_ HANDLE hDevice,
-    _In_ WIN11MON_ANOMALY_RULE_ID RuleId,
-    _In_ DWORD Threshold
-);
+Win11MonAnomalySetThreshold(_In_ HANDLE hDevice,
+                            _In_ WIN11MON_ANOMALY_RULE_ID RuleId,
+                            _In_ DWORD Threshold);
 
 /**
  * @function   Win11MonAnomalyEnableRule
@@ -412,11 +393,9 @@ Win11MonAnomalySetThreshold(
  */
 DWORD
 WINAPI
-Win11MonAnomalyEnableRule(
-    _In_ HANDLE hDevice,
-    _In_ WIN11MON_ANOMALY_RULE_ID RuleId,
-    _In_ BOOL Enable
-);
+Win11MonAnomalyEnableRule(_In_ HANDLE hDevice,
+                          _In_ WIN11MON_ANOMALY_RULE_ID RuleId,
+                          _In_ BOOL Enable);
 
 /**
  * @function   Win11MonAnomalyGetStats
@@ -431,10 +410,8 @@ Win11MonAnomalyEnableRule(
  */
 DWORD
 WINAPI
-Win11MonAnomalyGetStats(
-    _In_ HANDLE hDevice,
-    _Out_ PWIN11MON_ANOMALY_STATS pStats
-);
+Win11MonAnomalyGetStats(_In_ HANDLE hDevice,
+                        _Out_ PWIN11MON_ANOMALY_STATS pStats);
 
 /**
  * @function   Win11MonAnomalyResetStats
@@ -448,9 +425,7 @@ Win11MonAnomalyGetStats(
  */
 DWORD
 WINAPI
-Win11MonAnomalyResetStats(
-    _In_ HANDLE hDevice
-);
+Win11MonAnomalyResetStats(_In_ HANDLE hDevice);
 
 #ifdef __cplusplus
 } /* extern "C" */

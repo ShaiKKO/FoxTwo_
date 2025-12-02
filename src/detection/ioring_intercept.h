@@ -7,8 +7,9 @@
  * Version: 1.0
  * Date: 2025-11-30
  * Copyright:
- *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and confidential.
- *   Redistribution or disclosure without prior written consent is prohibited.
+ *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and
+ * confidential. Redistribution or disclosure without prior written consent is
+ * prohibited.
  *
  * Summary
  * -------
@@ -39,7 +40,7 @@
 #define _ZIX_LABS_IORING_INTERCEPT_H_
 
 #ifndef _KERNEL_MODE
-# error "This header is for kernel-mode only."
+#error "This header is for kernel-mode only."
 #endif
 
 #include <ntddk.h>
@@ -51,17 +52,21 @@ extern "C" {
 /*--------------------------------------------------------------------------
  * Pool Tags
  *-------------------------------------------------------------------------*/
-#define MON_INTERCEPT_TAG       'tInM'  /* 'MInt' – Monitor Intercept */
-#define MON_INTERCEPT_SQE_TAG   'qSnM'  /* 'MnSq' – SQE validation buffer */
+#define MON_INTERCEPT_TAG     'tInM' /* 'MInt' – Monitor Intercept */
+#define MON_INTERCEPT_SQE_TAG 'qSnM' /* 'MnSq' – SQE validation buffer */
 
 /*--------------------------------------------------------------------------
  * Configuration Constants
  *-------------------------------------------------------------------------*/
-#define MON_INTERCEPT_MAX_OPS_PER_SUBMIT    4096    /* Absolute max SQEs per submit */
-#define MON_INTERCEPT_DEFAULT_MAX_OPS       1024    /* Default policy limit */
-#define MON_INTERCEPT_DEFAULT_RATE_LIMIT    1000    /* Submits per second */
-#define MON_INTERCEPT_MAX_BLACKLIST         64      /* Max blacklisted PIDs */
-#define MON_INTERCEPT_MAX_BUFFER_SIZE       (256 * 1024 * 1024)  /* 256MB max buffer */
+#define MON_INTERCEPT_MAX_OPS_PER_SUBMIT                                      \
+  4096                                        /* Absolute max SQEs per submit \
+                                               */
+#define MON_INTERCEPT_DEFAULT_MAX_OPS    1024 /* Default policy limit */
+#define MON_INTERCEPT_DEFAULT_RATE_LIMIT 1000 /* Submits per second */
+#define MON_INTERCEPT_MAX_BLACKLIST      64   /* Max blacklisted PIDs */
+#define MON_INTERCEPT_MAX_BUFFER_SIZE     \
+  (256 * 1024 * 1024) /* 256MB max buffer \
+                       */
 
 /*--------------------------------------------------------------------------
  * Interception Action Codes
@@ -69,9 +74,9 @@ extern "C" {
  * Returned by validation to indicate policy decision.
  *-------------------------------------------------------------------------*/
 typedef enum _MON_INTERCEPT_ACTION {
-    MonIntercept_Allow = 0,         /* Operation permitted to proceed */
-    MonIntercept_Block = 1,         /* Operation blocked; return error to caller */
-    MonIntercept_LogOnly = 2        /* Audit mode: log violation but permit */
+  MonIntercept_Allow = 0,  /* Operation permitted to proceed */
+  MonIntercept_Block = 1,  /* Operation blocked; return error to caller */
+  MonIntercept_LogOnly = 2 /* Audit mode: log violation but permit */
 } MON_INTERCEPT_ACTION;
 
 /*--------------------------------------------------------------------------
@@ -81,18 +86,18 @@ typedef enum _MON_INTERCEPT_ACTION {
  * Maps to MITRE ATT&CK techniques where applicable.
  *-------------------------------------------------------------------------*/
 typedef enum _MON_INTERCEPT_REASON {
-    MonReason_None = 0,                     /* No violation */
-    MonReason_RegBuffersCorrupted = 1,      /* A2 validation failed (T1068) */
-    MonReason_KernelAddressInBuffer = 2,    /* Buffer VA in kernel space (T1068) */
-    MonReason_ExcessiveOperations = 3,      /* Too many SQEs in submission (T1499) */
-    MonReason_SuspiciousOpCode = 4,         /* Unknown/blocked opcode (T1203) */
-    MonReason_ProcessBlacklisted = 5,       /* PID on block list (T1055) */
-    MonReason_RateLimitExceeded = 6,        /* Submit rate exceeded (T1499) */
-    MonReason_InvalidHandle = 7,            /* IoRing handle invalid/not found */
-    MonReason_PolicyDisabled = 8,           /* Interception subsystem disabled */
-    MonReason_ValidationError = 9,          /* Internal error during validation */
-    MonReason_BufferSizeTooLarge = 10,      /* Single buffer exceeds limit */
-    MonReason_MalformedRequest = 11         /* Request structure invalid */
+  MonReason_None = 0,                  /* No violation */
+  MonReason_RegBuffersCorrupted = 1,   /* A2 validation failed (T1068) */
+  MonReason_KernelAddressInBuffer = 2, /* Buffer VA in kernel space (T1068) */
+  MonReason_ExcessiveOperations = 3,   /* Too many SQEs in submission (T1499) */
+  MonReason_SuspiciousOpCode = 4,      /* Unknown/blocked opcode (T1203) */
+  MonReason_ProcessBlacklisted = 5,    /* PID on block list (T1055) */
+  MonReason_RateLimitExceeded = 6,     /* Submit rate exceeded (T1499) */
+  MonReason_InvalidHandle = 7,         /* IoRing handle invalid/not found */
+  MonReason_PolicyDisabled = 8,        /* Interception subsystem disabled */
+  MonReason_ValidationError = 9,       /* Internal error during validation */
+  MonReason_BufferSizeTooLarge = 10,   /* Single buffer exceeds limit */
+  MonReason_MalformedRequest = 11      /* Request structure invalid */
 } MON_INTERCEPT_REASON;
 
 /*--------------------------------------------------------------------------
@@ -102,17 +107,17 @@ typedef enum _MON_INTERCEPT_REASON {
  * Source: ntioring_x.h, yardenshafir/IoRing_Demos
  *-------------------------------------------------------------------------*/
 typedef enum _MON_IORING_OP_CODE {
-    MonIoRingOp_Nop = 0,                /* No operation */
-    MonIoRingOp_Read = 1,               /* Read from file to buffer */
-    MonIoRingOp_RegisterFiles = 2,      /* Register file handle array */
-    MonIoRingOp_RegisterBuffers = 3,    /* Register buffer array */
-    MonIoRingOp_Cancel = 4,             /* Cancel pending operation */
-    MonIoRingOp_Write = 5,              /* Write from buffer to file */
-    MonIoRingOp_Flush = 6,              /* Flush file buffers */
-    MonIoRingOp_ReadScatter = 7,        /* Scatter read (Win11 22H2+) */
-    MonIoRingOp_WriteGather = 8,        /* Gather write (Win11 22H2+) */
-    MonIoRingOp_MaxKnown = 8,           /* Highest known opcode */
-    MonIoRingOp_ReservedMax = 255       /* Reserved upper bound */
+  MonIoRingOp_Nop = 0,             /* No operation */
+  MonIoRingOp_Read = 1,            /* Read from file to buffer */
+  MonIoRingOp_RegisterFiles = 2,   /* Register file handle array */
+  MonIoRingOp_RegisterBuffers = 3, /* Register buffer array */
+  MonIoRingOp_Cancel = 4,          /* Cancel pending operation */
+  MonIoRingOp_Write = 5,           /* Write from buffer to file */
+  MonIoRingOp_Flush = 6,           /* Flush file buffers */
+  MonIoRingOp_ReadScatter = 7,     /* Scatter read (Win11 22H2+) */
+  MonIoRingOp_WriteGather = 8,     /* Gather write (Win11 22H2+) */
+  MonIoRingOp_MaxKnown = 8,        /* Highest known opcode */
+  MonIoRingOp_ReservedMax = 255    /* Reserved upper bound */
 } MON_IORING_OP_CODE;
 
 /*--------------------------------------------------------------------------
@@ -120,10 +125,12 @@ typedef enum _MON_IORING_OP_CODE {
  *
  * Flags for individual submission queue entries.
  *-------------------------------------------------------------------------*/
-#define MON_SQE_FLAG_NONE                   0x00
-#define MON_SQE_FLAG_DRAIN_PRECEDING_OPS    0x01    /* Wait for prior ops */
-#define MON_SQE_FLAG_PREREGISTERED_FILE     0x01    /* FileRef is index, not handle */
-#define MON_SQE_FLAG_PREREGISTERED_BUFFER   0x02    /* Buffer is index, not pointer */
+#define MON_SQE_FLAG_NONE                0x00
+#define MON_SQE_FLAG_DRAIN_PRECEDING_OPS 0x01 /* Wait for prior ops */
+#define MON_SQE_FLAG_PREREGISTERED_FILE                                        \
+  0x01                                         /* FileRef is index, not handle \
+                                                */
+#define MON_SQE_FLAG_PREREGISTERED_BUFFER 0x02 /* Buffer is index, not pointer */
 
 /*--------------------------------------------------------------------------
  * Serialized Submission Queue Entry
@@ -137,26 +144,26 @@ typedef enum _MON_IORING_OP_CODE {
  * - BufferAddress must be checked against kernel boundary
  *-------------------------------------------------------------------------*/
 typedef struct _MON_SERIALIZED_SQE {
-    ULONG       OpCode;             /* 0x00: Operation type (MON_IORING_OP_CODE) */
-    ULONG       Flags;              /* 0x04: SQE flags */
-    union {
-        ULONG64 FileRef;            /* 0x08: File handle or pre-registered index */
-        ULONG64 FilePaddingForx86;
-    };
-    LARGE_INTEGER FileOffset;       /* 0x10: File offset for I/O operations */
-    union {
-        ULONG64 BufferAddress;      /* 0x18: Buffer VA or pre-registered index */
-        ULONG64 BufferPaddingForx86;
-    };
-    ULONG       BufferSize;         /* 0x20: Buffer size in bytes */
-    ULONG       BufferOffset;       /* 0x24: Offset within buffer */
-    ULONG       Key;                /* 0x28: Cancellation key */
-    ULONG       Reserved1;          /* 0x2C: Padding */
-    ULONG64     UserData;           /* 0x30: User-defined context */
-    ULONG64     Padding[4];         /* 0x38-0x50: Reserved/alignment */
+  ULONG OpCode; /* 0x00: Operation type (MON_IORING_OP_CODE) */
+  ULONG Flags;  /* 0x04: SQE flags */
+  union {
+    ULONG64 FileRef; /* 0x08: File handle or pre-registered index */
+    ULONG64 FilePaddingForx86;
+  };
+  LARGE_INTEGER FileOffset; /* 0x10: File offset for I/O operations */
+  union {
+    ULONG64 BufferAddress; /* 0x18: Buffer VA or pre-registered index */
+    ULONG64 BufferPaddingForx86;
+  };
+  ULONG BufferSize;   /* 0x20: Buffer size in bytes */
+  ULONG BufferOffset; /* 0x24: Offset within buffer */
+  ULONG Key;          /* 0x28: Cancellation key */
+  ULONG Reserved1;    /* 0x2C: Padding */
+  ULONG64 UserData;   /* 0x30: User-defined context */
+  ULONG64 Padding[4]; /* 0x38-0x50: Reserved/alignment */
 } MON_SERIALIZED_SQE, *PMON_SERIALIZED_SQE;
 
-C_ASSERT(sizeof(MON_SERIALIZED_SQE) == 0x58);  /* 88 bytes */
+C_ASSERT(sizeof(MON_SERIALIZED_SQE) == 0x58); /* 88 bytes */
 C_ASSERT(FIELD_OFFSET(MON_SERIALIZED_SQE, OpCode) == 0x00);
 C_ASSERT(FIELD_OFFSET(MON_SERIALIZED_SQE, FileRef) == 0x08);
 C_ASSERT(FIELD_OFFSET(MON_SERIALIZED_SQE, BufferAddress) == 0x18);
@@ -169,33 +176,33 @@ C_ASSERT(FIELD_OFFSET(MON_SERIALIZED_SQE, UserData) == 0x30);
  * Atomic updates via spinlock; lock-free reads after version check.
  *-------------------------------------------------------------------------*/
 typedef struct _MON_INTERCEPT_POLICY {
-    ULONG       Size;                       /* Must be sizeof(MON_INTERCEPT_POLICY) */
+  ULONG Size; /* Must be sizeof(MON_INTERCEPT_POLICY) */
 
-    /* Master controls */
-    BOOLEAN     Enabled;                    /* Global enable/disable */
-    BOOLEAN     AuditMode;                  /* TRUE: log but don't block */
+  /* Master controls */
+  BOOLEAN Enabled;   /* Global enable/disable */
+  BOOLEAN AuditMode; /* TRUE: log but don't block */
 
-    /* Validation toggles */
-    BOOLEAN     BlockKernelAddresses;       /* Block if buffer VA >= MmUserProbeAddress */
-    BOOLEAN     BlockCorruptedRegBuffers;   /* Integrate with A2 RegBuffers check */
-    BOOLEAN     EnforceOperationLimit;      /* Enforce MaxOperationsPerSubmit */
-    BOOLEAN     EnforceRateLimit;           /* Per-process submit rate limiting */
-    BOOLEAN     ValidateOpCodes;            /* Check against AllowedOpCodeMask */
-    BOOLEAN     Reserved1;                  /* Alignment padding */
+  /* Validation toggles */
+  BOOLEAN BlockKernelAddresses;     /* Block if buffer VA >= MmUserProbeAddress */
+  BOOLEAN BlockCorruptedRegBuffers; /* Integrate with A2 RegBuffers check */
+  BOOLEAN EnforceOperationLimit;    /* Enforce MaxOperationsPerSubmit */
+  BOOLEAN EnforceRateLimit;         /* Per-process submit rate limiting */
+  BOOLEAN ValidateOpCodes;          /* Check against AllowedOpCodeMask */
+  BOOLEAN Reserved1;                /* Alignment padding */
 
-    /* Thresholds */
-    ULONG       MaxOperationsPerSubmit;     /* 0 = use default (1024) */
-    ULONG       MaxBufferSizeBytes;         /* 0 = no limit; else max per-buffer */
-    ULONG       MaxSubmitsPerSecond;        /* 0 = use default (1000) */
+  /* Thresholds */
+  ULONG MaxOperationsPerSubmit; /* 0 = use default (1024) */
+  ULONG MaxBufferSizeBytes;     /* 0 = no limit; else max per-buffer */
+  ULONG MaxSubmitsPerSecond;    /* 0 = use default (1000) */
 
-    /* Operation whitelist */
-    ULONG       AllowedOpCodeMask;          /* Bitmask: bit N = opcode N allowed */
-                                            /* 0 = all opcodes permitted */
-                                            /* Default 0x1FF = ops 0-8 allowed */
+  /* Operation whitelist */
+  ULONG AllowedOpCodeMask; /* Bitmask: bit N = opcode N allowed */
+                           /* 0 = all opcodes permitted */
+                           /* Default 0x1FF = ops 0-8 allowed */
 } MON_INTERCEPT_POLICY, *PMON_INTERCEPT_POLICY;
 
 C_ASSERT(sizeof(MON_INTERCEPT_POLICY) == 28);
-#define MON_INTERCEPT_DEFAULT_OPCODE_MASK   0x000001FF  /* Ops 0-8 (all known) */
+#define MON_INTERCEPT_DEFAULT_OPCODE_MASK 0x000001FF /* Ops 0-8 (all known) */
 
 /*--------------------------------------------------------------------------
  * Validation Request Structure
@@ -204,24 +211,25 @@ C_ASSERT(sizeof(MON_INTERCEPT_POLICY) == 28);
  * Variable-length: header followed by SQE array.
  *
  * SECURITY REQUIREMENTS:
- * 1. Validate Size field matches expected: header + (OperationCount * sizeof(SQE))
+ * 1. Validate Size field matches expected: header + (OperationCount *
+ * sizeof(SQE))
  * 2. Bound OperationCount to MON_INTERCEPT_MAX_OPS_PER_SUBMIT
  * 3. Probe entire buffer before accessing SQE array
  *-------------------------------------------------------------------------*/
 typedef struct _MON_INTERCEPT_REQUEST {
-    ULONG       Size;               /* Total structure size including SQEs */
-    ULONG       Version;            /* Protocol version (must be 1) */
-    ULONG       ProcessId;          /* Calling process ID */
-    ULONG       ThreadId;           /* Calling thread ID */
-    ULONG64     IoRingHandle;       /* Handle value being submitted */
-    ULONG       OperationCount;     /* Number of SQEs following header */
-    ULONG       Flags;              /* Reserved, must be 0 */
-    /* MON_SERIALIZED_SQE array[OperationCount] follows immediately */
+  ULONG Size;           /* Total structure size including SQEs */
+  ULONG Version;        /* Protocol version (must be 1) */
+  ULONG ProcessId;      /* Calling process ID */
+  ULONG ThreadId;       /* Calling thread ID */
+  ULONG64 IoRingHandle; /* Handle value being submitted */
+  ULONG OperationCount; /* Number of SQEs following header */
+  ULONG Flags;          /* Reserved, must be 0 */
+  /* MON_SERIALIZED_SQE array[OperationCount] follows immediately */
 } MON_INTERCEPT_REQUEST, *PMON_INTERCEPT_REQUEST;
 
 C_ASSERT(sizeof(MON_INTERCEPT_REQUEST) == 32);
-#define MON_INTERCEPT_REQUEST_HEADER_SIZE   sizeof(MON_INTERCEPT_REQUEST)
-#define MON_INTERCEPT_REQUEST_VERSION       1
+#define MON_INTERCEPT_REQUEST_HEADER_SIZE sizeof(MON_INTERCEPT_REQUEST)
+#define MON_INTERCEPT_REQUEST_VERSION     1
 
 /*--------------------------------------------------------------------------
  * Validation Response Structure
@@ -229,14 +237,14 @@ C_ASSERT(sizeof(MON_INTERCEPT_REQUEST) == 32);
  * Returned to user-mode with validation decision.
  *-------------------------------------------------------------------------*/
 typedef struct _MON_INTERCEPT_RESPONSE {
-    ULONG                   Size;               /* sizeof(MON_INTERCEPT_RESPONSE) */
-    MON_INTERCEPT_ACTION    Action;             /* Allow/Block/LogOnly */
-    MON_INTERCEPT_REASON    Reason;             /* Why this decision */
-    ULONG                   ViolatingOpIndex;   /* Index of first bad SQE, or (ULONG)-1 */
-    ULONG                   ViolationFlags;     /* Additional MON_REGBUF_VF_* flags */
-    ULONG                   Reserved;           /* Alignment */
-    ULONG64                 ValidationTimeNs;   /* Time spent validating (nanoseconds) */
-    CHAR                    MitreTechnique[16]; /* ATT&CK technique ID (e.g., "T1068") */
+  ULONG Size;                  /* sizeof(MON_INTERCEPT_RESPONSE) */
+  MON_INTERCEPT_ACTION Action; /* Allow/Block/LogOnly */
+  MON_INTERCEPT_REASON Reason; /* Why this decision */
+  ULONG ViolatingOpIndex;      /* Index of first bad SQE, or (ULONG)-1 */
+  ULONG ViolationFlags;        /* Additional MON_REGBUF_VF_* flags */
+  ULONG Reserved;              /* Alignment */
+  ULONG64 ValidationTimeNs;    /* Time spent validating (nanoseconds) */
+  CHAR MitreTechnique[16];     /* ATT&CK technique ID (e.g., "T1068") */
 } MON_INTERCEPT_RESPONSE, *PMON_INTERCEPT_RESPONSE;
 
 C_ASSERT(sizeof(MON_INTERCEPT_RESPONSE) == 48);
@@ -247,37 +255,37 @@ C_ASSERT(sizeof(MON_INTERCEPT_RESPONSE) == 48);
  * Volatile counters for operational metrics.
  *-------------------------------------------------------------------------*/
 typedef struct _MON_INTERCEPT_STATS {
-    ULONG       Size;                       /* sizeof(MON_INTERCEPT_STATS) */
-    ULONG       Reserved;                   /* Alignment */
+  ULONG Size;     /* sizeof(MON_INTERCEPT_STATS) */
+  ULONG Reserved; /* Alignment */
 
-    /* Request metrics */
-    volatile LONG64 TotalValidationRequests;
-    volatile LONG64 TotalOperationsValidated;
+  /* Request metrics */
+  volatile LONG64 TotalValidationRequests;
+  volatile LONG64 TotalOperationsValidated;
 
-    /* Decision metrics */
-    volatile LONG64 TotalAllowed;
-    volatile LONG64 TotalBlocked;
-    volatile LONG64 TotalLogOnly;
+  /* Decision metrics */
+  volatile LONG64 TotalAllowed;
+  volatile LONG64 TotalBlocked;
+  volatile LONG64 TotalLogOnly;
 
-    /* Block reason breakdown */
-    volatile LONG64 BlockedRegBuffers;
-    volatile LONG64 BlockedKernelAddress;
-    volatile LONG64 BlockedExcessiveOps;
-    volatile LONG64 BlockedSuspiciousOpCode;
-    volatile LONG64 BlockedBlacklist;
-    volatile LONG64 BlockedRateLimit;
-    volatile LONG64 BlockedInvalidHandle;
-    volatile LONG64 BlockedBufferSize;
-    volatile LONG64 BlockedMalformed;
+  /* Block reason breakdown */
+  volatile LONG64 BlockedRegBuffers;
+  volatile LONG64 BlockedKernelAddress;
+  volatile LONG64 BlockedExcessiveOps;
+  volatile LONG64 BlockedSuspiciousOpCode;
+  volatile LONG64 BlockedBlacklist;
+  volatile LONG64 BlockedRateLimit;
+  volatile LONG64 BlockedInvalidHandle;
+  volatile LONG64 BlockedBufferSize;
+  volatile LONG64 BlockedMalformed;
 
-    /* Performance metrics */
-    volatile LONG64 TotalValidationTimeNs;
-    volatile ULONG  PeakValidationTimeUs;
-    volatile ULONG  AverageValidationTimeUs;
+  /* Performance metrics */
+  volatile LONG64 TotalValidationTimeNs;
+  volatile ULONG PeakValidationTimeUs;
+  volatile ULONG AverageValidationTimeUs;
 
-    /* Error metrics */
-    volatile LONG64 ValidationErrors;
-    volatile LONG64 SehExceptions;
+  /* Error metrics */
+  volatile LONG64 ValidationErrors;
+  volatile LONG64 SehExceptions;
 
 } MON_INTERCEPT_STATS, *PMON_INTERCEPT_STATS;
 
@@ -289,11 +297,11 @@ C_ASSERT(sizeof(MON_INTERCEPT_STATS) == 152);
  * Entries for processes blocked from IoRing operations.
  *-------------------------------------------------------------------------*/
 typedef struct _MON_BLACKLIST_ENTRY {
-    ULONG       ProcessId;          /* 0 = slot empty */
-    ULONG       Reserved;           /* Alignment */
-    ULONG64     AddedTime;          /* KeQuerySystemTime when added */
-    WCHAR       ProcessName[64];    /* Image name for logging */
-    CHAR        Reason[64];         /* Human-readable reason */
+  ULONG ProcessId;       /* 0 = slot empty */
+  ULONG Reserved;        /* Alignment */
+  ULONG64 AddedTime;     /* KeQuerySystemTime when added */
+  WCHAR ProcessName[64]; /* Image name for logging */
+  CHAR Reason[64];       /* Human-readable reason */
 } MON_BLACKLIST_ENTRY, *PMON_BLACKLIST_ENTRY;
 
 C_ASSERT(sizeof(MON_BLACKLIST_ENTRY) == 208);
@@ -312,8 +320,7 @@ C_ASSERT(sizeof(MON_BLACKLIST_ENTRY) == 208);
  * @thread-safety Single-threaded; called once during init
  * @side-effects Allocates blacklist storage; initializes spinlocks
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS MonInterceptInitialize(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS MonInterceptInitialize(VOID);
 
 /**
  * @function   MonInterceptShutdown
@@ -323,8 +330,7 @@ NTSTATUS MonInterceptInitialize(VOID);
  * @thread-safety Single-threaded; no concurrent operations
  * @side-effects Frees all allocated memory
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-VOID MonInterceptShutdown(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) VOID MonInterceptShutdown(VOID);
 
 /**
  * @function   MonInterceptValidateSubmission
@@ -348,13 +354,9 @@ VOID MonInterceptShutdown(VOID);
  * @thread-safety Re-entrant; concurrent validation supported
  * @side-effects Updates statistics; may log to ring buffer
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS
-MonInterceptValidateSubmission(
-    _In_reads_bytes_(RequestSize) PMON_INTERCEPT_REQUEST Request,
-    _In_ ULONG RequestSize,
-    _Out_ PMON_INTERCEPT_RESPONSE Response
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonInterceptValidateSubmission(_In_reads_bytes_(RequestSize) PMON_INTERCEPT_REQUEST Request,
+                                   _In_ ULONG RequestSize, _Out_ PMON_INTERCEPT_RESPONSE Response);
 
 /**
  * @function   MonInterceptSetPolicy
@@ -369,11 +371,8 @@ MonInterceptValidateSubmission(
  * @thread-safety Spinlock-synchronized update
  * @side-effects Increments policy version counter
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-NTSTATUS
-MonInterceptSetPolicy(
-    _In_ PMON_INTERCEPT_POLICY Policy
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) NTSTATUS
+    MonInterceptSetPolicy(_In_ PMON_INTERCEPT_POLICY Policy);
 
 /**
  * @function   MonInterceptGetPolicy
@@ -386,11 +385,7 @@ MonInterceptSetPolicy(
  * @thread-safety Lock-free snapshot
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-VOID
-MonInterceptGetPolicy(
-    _Out_ PMON_INTERCEPT_POLICY Policy
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) VOID MonInterceptGetPolicy(_Out_ PMON_INTERCEPT_POLICY Policy);
 
 /**
  * @function   MonInterceptGetStats
@@ -403,11 +398,7 @@ MonInterceptGetPolicy(
  * @thread-safety Lock-free snapshot of volatile counters
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-VOID
-MonInterceptGetStats(
-    _Out_ PMON_INTERCEPT_STATS Stats
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) VOID MonInterceptGetStats(_Out_ PMON_INTERCEPT_STATS Stats);
 
 /**
  * @function   MonInterceptResetStats
@@ -418,8 +409,7 @@ MonInterceptGetStats(
  * @thread-safety Interlocked operations on each counter
  * @side-effects Clears all metrics
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-VOID MonInterceptResetStats(VOID);
+_IRQL_requires_max_(DISPATCH_LEVEL) VOID MonInterceptResetStats(VOID);
 
 /**
  * @function   MonInterceptAddToBlacklist
@@ -437,13 +427,9 @@ VOID MonInterceptResetStats(VOID);
  * @thread-safety Spinlock-synchronized
  * @side-effects May overwrite existing entry for same PID
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-NTSTATUS
-MonInterceptAddToBlacklist(
-    _In_ ULONG ProcessId,
-    _In_opt_ PCWSTR ProcessName,
-    _In_opt_ PCSTR Reason
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) NTSTATUS
+    MonInterceptAddToBlacklist(_In_ ULONG ProcessId, _In_opt_ PCWSTR ProcessName,
+                               _In_opt_ PCSTR Reason);
 
 /**
  * @function   MonInterceptRemoveFromBlacklist
@@ -456,11 +442,7 @@ MonInterceptAddToBlacklist(
  * @thread-safety Spinlock-synchronized
  * @side-effects Clears blacklist entry
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-BOOLEAN
-MonInterceptRemoveFromBlacklist(
-    _In_ ULONG ProcessId
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) BOOLEAN MonInterceptRemoveFromBlacklist(_In_ ULONG ProcessId);
 
 /**
  * @function   MonInterceptIsBlacklisted
@@ -473,11 +455,7 @@ MonInterceptRemoveFromBlacklist(
  * @thread-safety Lock-free linear scan
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-BOOLEAN
-MonInterceptIsBlacklisted(
-    _In_ ULONG ProcessId
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) BOOLEAN MonInterceptIsBlacklisted(_In_ ULONG ProcessId);
 
 /**
  * @function   MonInterceptEnumerateBlacklist
@@ -494,13 +472,10 @@ MonInterceptIsBlacklisted(
  * @thread-safety Spinlock-protected snapshot
  * @side-effects None
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS
-MonInterceptEnumerateBlacklist(
-    _Out_writes_to_(MaxEntries, *EntryCount) PMON_BLACKLIST_ENTRY Buffer,
-    _In_ ULONG MaxEntries,
-    _Out_ ULONG* EntryCount
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonInterceptEnumerateBlacklist(_Out_writes_to_(MaxEntries, *EntryCount)
+                                       PMON_BLACKLIST_ENTRY Buffer,
+                                   _In_ ULONG MaxEntries, _Out_ ULONG *EntryCount);
 
 /**
  * @function   MonInterceptIsEnabled
@@ -511,8 +486,7 @@ MonInterceptEnumerateBlacklist(
  * @thread-safety Lock-free read
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-BOOLEAN MonInterceptIsEnabled(VOID);
+_IRQL_requires_max_(DISPATCH_LEVEL) BOOLEAN MonInterceptIsEnabled(VOID);
 
 /**
  * @function   MonInterceptEnable
@@ -524,10 +498,7 @@ BOOLEAN MonInterceptIsEnabled(VOID);
  * @thread-safety Spinlock-synchronized
  * @side-effects Updates policy Enabled flag
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-VOID MonInterceptEnable(
-    _In_ BOOLEAN Enable
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) VOID MonInterceptEnable(_In_ BOOLEAN Enable);
 
 /**
  * @function   MonInterceptIsInitialized
@@ -538,8 +509,7 @@ VOID MonInterceptEnable(
  * @thread-safety Lock-free read
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-BOOLEAN MonInterceptIsInitialized(VOID);
+_IRQL_requires_max_(DISPATCH_LEVEL) BOOLEAN MonInterceptIsInitialized(VOID);
 
 #ifdef __cplusplus
 } /* extern "C" */

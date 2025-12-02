@@ -7,8 +7,9 @@
  * Version: 1.0
  * Date: 2025-11-30
  * Copyright:
- *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and confidential.
- *   Redistribution or disclosure without prior written consent is prohibited.
+ *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and
+ * confidential. Redistribution or disclosure without prior written consent is
+ * prohibited.
  *
  * Summary
  * -------
@@ -34,84 +35,84 @@ extern "C" {
 /*--------------------------------------------------------------------------
  * Cross-Process Detection Constants
  *-------------------------------------------------------------------------*/
-#define WIN11MON_XP_MAX_SHARED_OBJECTS  256
-#define WIN11MON_XP_MAX_PROCESSES       8
-#define WIN11MON_XP_MAX_CACHED_PROCS    4096
-#define WIN11MON_XP_MAX_SECTIONS        128
-#define WIN11MON_XP_MAX_ALERTS          64
+#define WIN11MON_XP_MAX_SHARED_OBJECTS 256
+#define WIN11MON_XP_MAX_PROCESSES 8
+#define WIN11MON_XP_MAX_CACHED_PROCS 4096
+#define WIN11MON_XP_MAX_SECTIONS 128
+#define WIN11MON_XP_MAX_ALERTS 64
 
 /*--------------------------------------------------------------------------
  * Alert Type Enumeration
  *-------------------------------------------------------------------------*/
 typedef enum _WIN11MON_XP_ALERT_TYPE {
-    Win11MonXpAlert_None = 0,
-    Win11MonXpAlert_SharedIoRing = 1,
-    Win11MonXpAlert_UnrelatedSharing = 2,
-    Win11MonXpAlert_CrossIntegrityShare = 3,
-    Win11MonXpAlert_SystemIoRingAccess = 4,
-    Win11MonXpAlert_HandleDuplication = 5,
-    Win11MonXpAlert_SectionSharing = 6,
-    Win11MonXpAlert_InheritanceAnomaly = 7,
-    Win11MonXpAlert_Max = 8
+  Win11MonXpAlert_None = 0,
+  Win11MonXpAlert_SharedIoRing = 1,
+  Win11MonXpAlert_UnrelatedSharing = 2,
+  Win11MonXpAlert_CrossIntegrityShare = 3,
+  Win11MonXpAlert_SystemIoRingAccess = 4,
+  Win11MonXpAlert_HandleDuplication = 5,
+  Win11MonXpAlert_SectionSharing = 6,
+  Win11MonXpAlert_InheritanceAnomaly = 7,
+  Win11MonXpAlert_Max = 8
 } WIN11MON_XP_ALERT_TYPE;
 
 /*--------------------------------------------------------------------------
  * Severity Enumeration
  *-------------------------------------------------------------------------*/
 typedef enum _WIN11MON_XP_SEVERITY {
-    Win11MonXpSeverity_Info = 0,
-    Win11MonXpSeverity_Low = 1,
-    Win11MonXpSeverity_Medium = 2,
-    Win11MonXpSeverity_High = 3,
-    Win11MonXpSeverity_Critical = 4
+  Win11MonXpSeverity_Info = 0,
+  Win11MonXpSeverity_Low = 1,
+  Win11MonXpSeverity_Medium = 2,
+  Win11MonXpSeverity_High = 3,
+  Win11MonXpSeverity_Critical = 4
 } WIN11MON_XP_SEVERITY;
 
 /*--------------------------------------------------------------------------
  * Rule ID Enumeration
  *-------------------------------------------------------------------------*/
 typedef enum _WIN11MON_XP_RULE_ID {
-    Win11MonXpRule_None = 0,
-    Win11MonXpRule_UnrelatedIoRingSharing = 100,
-    Win11MonXpRule_SystemIoRingFromUser = 101,
-    Win11MonXpRule_CrossIntegrityIoRing = 102,
-    Win11MonXpRule_SectionIoRingBuffer = 103,
-    Win11MonXpRule_UnexpectedInheritance = 104,
-    Win11MonXpRule_RapidDuplication = 105,
-    Win11MonXpRule_Max = 106
+  Win11MonXpRule_None = 0,
+  Win11MonXpRule_UnrelatedIoRingSharing = 100,
+  Win11MonXpRule_SystemIoRingFromUser = 101,
+  Win11MonXpRule_CrossIntegrityIoRing = 102,
+  Win11MonXpRule_SectionIoRingBuffer = 103,
+  Win11MonXpRule_UnexpectedInheritance = 104,
+  Win11MonXpRule_RapidDuplication = 105,
+  Win11MonXpRule_Max = 106
 } WIN11MON_XP_RULE_ID;
 
 /*--------------------------------------------------------------------------
  * Shared Object Flags
  *-------------------------------------------------------------------------*/
-#define WIN11MON_XP_FLAG_CROSS_INTEGRITY    0x0001
-#define WIN11MON_XP_FLAG_CROSS_SESSION      0x0002
-#define WIN11MON_XP_FLAG_SYSTEM_INVOLVED    0x0004
-#define WIN11MON_XP_FLAG_SERVICE_INVOLVED   0x0008
-#define WIN11MON_XP_FLAG_UNRELATED          0x0010
-#define WIN11MON_XP_FLAG_SUSPICIOUS         0x0020
-#define WIN11MON_XP_FLAG_INHERITED          0x0040
-#define WIN11MON_XP_FLAG_WHITELISTED        0x0080
+#define WIN11MON_XP_FLAG_CROSS_INTEGRITY 0x0001
+#define WIN11MON_XP_FLAG_CROSS_SESSION 0x0002
+#define WIN11MON_XP_FLAG_SYSTEM_INVOLVED 0x0004
+#define WIN11MON_XP_FLAG_SERVICE_INVOLVED 0x0008
+#define WIN11MON_XP_FLAG_UNRELATED 0x0010
+#define WIN11MON_XP_FLAG_SUSPICIOUS 0x0020
+#define WIN11MON_XP_FLAG_INHERITED 0x0040
+#define WIN11MON_XP_FLAG_WHITELISTED 0x0080
 
 /*--------------------------------------------------------------------------
  * Process Flags
  *-------------------------------------------------------------------------*/
-#define WIN11MON_XP_PROC_FLAG_ELEVATED      0x0001
-#define WIN11MON_XP_PROC_FLAG_SERVICE       0x0002
-#define WIN11MON_XP_PROC_FLAG_SYSTEM        0x0004
-#define WIN11MON_XP_PROC_FLAG_INTERACTIVE   0x0008
-#define WIN11MON_XP_PROC_FLAG_TERMINATED    0x0010
+#define WIN11MON_XP_PROC_FLAG_ELEVATED 0x0001
+#define WIN11MON_XP_PROC_FLAG_SERVICE 0x0002
+#define WIN11MON_XP_PROC_FLAG_SYSTEM 0x0004
+#define WIN11MON_XP_PROC_FLAG_INTERACTIVE 0x0008
+#define WIN11MON_XP_PROC_FLAG_TERMINATED 0x0010
 
 /*--------------------------------------------------------------------------
  * Handle Entry (per-process handle info within a shared object)
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_XP_HANDLE_ENTRY {
-    DWORD       ProcessId;
-    ULONG64     HandleValue;
-    DWORD       AccessMask;
-    DWORD       IntegrityLevel;
-    DWORD       SessionId;
-    DWORD       Reserved;
+  DWORD ProcessId;
+  ULONG64 HandleValue;
+  DWORD AccessMask;
+  DWORD IntegrityLevel;
+  DWORD SessionId;
+  DWORD Reserved;
 } WIN11MON_XP_HANDLE_ENTRY, *PWIN11MON_XP_HANDLE_ENTRY;
 #pragma pack(pop)
 
@@ -120,19 +121,19 @@ typedef struct _WIN11MON_XP_HANDLE_ENTRY {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_XP_SHARED_OBJECT {
-    ULONG64     ObjectAddressMasked;
-    DWORD       ObjectTypeIndex;
-    DWORD       ProcessCount;
-    DWORD       Flags;
-    DWORD       RiskScore;
-    DWORD       TriggeredRules;
-    BOOL        HasParentChildRelation;
-    DWORD       CommonAncestorPid;
-    ULONG64     FirstDetectedTime;
-    ULONG64     LastUpdatedTime;
-    BOOL        HasSectionBacking;
-    DWORD       Reserved;
-    WIN11MON_XP_HANDLE_ENTRY Processes[WIN11MON_XP_MAX_PROCESSES];
+  ULONG64 ObjectAddressMasked;
+  DWORD ObjectTypeIndex;
+  DWORD ProcessCount;
+  DWORD Flags;
+  DWORD RiskScore;
+  DWORD TriggeredRules;
+  BOOL HasParentChildRelation;
+  DWORD CommonAncestorPid;
+  ULONG64 FirstDetectedTime;
+  ULONG64 LastUpdatedTime;
+  BOOL HasSectionBacking;
+  DWORD Reserved;
+  WIN11MON_XP_HANDLE_ENTRY Processes[WIN11MON_XP_MAX_PROCESSES];
 } WIN11MON_XP_SHARED_OBJECT, *PWIN11MON_XP_SHARED_OBJECT;
 #pragma pack(pop)
 
@@ -141,14 +142,14 @@ typedef struct _WIN11MON_XP_SHARED_OBJECT {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_XP_PROCESS_ENTRY {
-    DWORD       ProcessId;
-    DWORD       ParentProcessId;
-    DWORD       SessionId;
-    DWORD       IntegrityLevel;
-    DWORD       Flags;
-    DWORD       Reserved;
-    ULONG64     CreateTime;
-    WCHAR       ImageName[32];
+  DWORD ProcessId;
+  DWORD ParentProcessId;
+  DWORD SessionId;
+  DWORD IntegrityLevel;
+  DWORD Flags;
+  DWORD Reserved;
+  ULONG64 CreateTime;
+  WCHAR ImageName[32];
 } WIN11MON_XP_PROCESS_ENTRY, *PWIN11MON_XP_PROCESS_ENTRY;
 #pragma pack(pop)
 
@@ -157,15 +158,15 @@ typedef struct _WIN11MON_XP_PROCESS_ENTRY {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_XP_SECTION_INFO {
-    ULONG64     SectionAddressMasked;
-    WCHAR       SectionName[64];
-    BOOL        IsNamed;
-    DWORD       MappingCount;
-    ULONG64     MaximumSize;
-    DWORD       AllocationAttributes;
-    BOOL        RelatedToIoRing;
-    DWORD       RelatedIoRingPid;
-    DWORD       Reserved;
+  ULONG64 SectionAddressMasked;
+  WCHAR SectionName[64];
+  BOOL IsNamed;
+  DWORD MappingCount;
+  ULONG64 MaximumSize;
+  DWORD AllocationAttributes;
+  BOOL RelatedToIoRing;
+  DWORD RelatedIoRingPid;
+  DWORD Reserved;
 } WIN11MON_XP_SECTION_INFO, *PWIN11MON_XP_SECTION_INFO;
 #pragma pack(pop)
 
@@ -174,27 +175,27 @@ typedef struct _WIN11MON_XP_SECTION_INFO {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_XP_ALERT_EVENT {
-    DWORD       Size;
-    WIN11MON_XP_ALERT_TYPE AlertType;
-    WIN11MON_XP_SEVERITY Severity;
-    DWORD       RuleId;
-    ULONG64     Timestamp;
-    ULONG64     ObjectAddressMasked;
-    DWORD       ObjectTypeIndex;
-    DWORD       SourceProcessId;
-    DWORD       TargetProcessId;
-    WCHAR       SourceProcessName[32];
-    WCHAR       TargetProcessName[32];
-    ULONG64     SourceHandle;
-    ULONG64     TargetHandle;
-    DWORD       SourceAccess;
-    DWORD       TargetAccess;
-    BOOL        IsParentChild;
-    DWORD       SourceIntegrity;
-    DWORD       TargetIntegrity;
-    DWORD       RiskScore;
-    CHAR        MitreTechnique[16];
-    CHAR        Description[64];
+  DWORD Size;
+  WIN11MON_XP_ALERT_TYPE AlertType;
+  WIN11MON_XP_SEVERITY Severity;
+  DWORD RuleId;
+  ULONG64 Timestamp;
+  ULONG64 ObjectAddressMasked;
+  DWORD ObjectTypeIndex;
+  DWORD SourceProcessId;
+  DWORD TargetProcessId;
+  WCHAR SourceProcessName[32];
+  WCHAR TargetProcessName[32];
+  ULONG64 SourceHandle;
+  ULONG64 TargetHandle;
+  DWORD SourceAccess;
+  DWORD TargetAccess;
+  BOOL IsParentChild;
+  DWORD SourceIntegrity;
+  DWORD TargetIntegrity;
+  DWORD RiskScore;
+  CHAR MitreTechnique[16];
+  CHAR Description[64];
 } WIN11MON_XP_ALERT_EVENT, *PWIN11MON_XP_ALERT_EVENT;
 #pragma pack(pop)
 
@@ -203,20 +204,20 @@ typedef struct _WIN11MON_XP_ALERT_EVENT {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_XP_STATS {
-    DWORD       Size;
-    DWORD       Reserved;
-    DWORD       TotalScansPerformed;
-    DWORD       SharedObjectsDetected;
-    DWORD       UnrelatedSharingCount;
-    DWORD       CrossIntegritySharingCount;
-    DWORD       SystemAccessCount;
-    DWORD       HandleDuplicationCount;
-    DWORD       SectionSharingCount;
-    DWORD       InheritanceAnomalyCount;
-    DWORD       TotalAlertsGenerated;
-    DWORD       ProcessesTracked;
-    DWORD       AverageScanTimeUs;
-    DWORD       Reserved2;
+  DWORD Size;
+  DWORD Reserved;
+  DWORD TotalScansPerformed;
+  DWORD SharedObjectsDetected;
+  DWORD UnrelatedSharingCount;
+  DWORD CrossIntegritySharingCount;
+  DWORD SystemAccessCount;
+  DWORD HandleDuplicationCount;
+  DWORD SectionSharingCount;
+  DWORD InheritanceAnomalyCount;
+  DWORD TotalAlertsGenerated;
+  DWORD ProcessesTracked;
+  DWORD AverageScanTimeUs;
+  DWORD Reserved2;
 } WIN11MON_XP_STATS, *PWIN11MON_XP_STATS;
 #pragma pack(pop)
 
@@ -225,15 +226,15 @@ typedef struct _WIN11MON_XP_STATS {
  *-------------------------------------------------------------------------*/
 #pragma pack(push, 8)
 typedef struct _WIN11MON_XP_CONFIG {
-    DWORD       Size;
-    DWORD       Reserved;
-    BOOL        Enabled;
-    DWORD       ScanIntervalMs;
-    DWORD       AlertThreshold;
-    DWORD       CriticalThreshold;
-    BOOL        WhitelistEnabled;
-    DWORD       MaxAlertsPerMinute;
-    DWORD       ProcessTreeRefreshMs;
+  DWORD Size;
+  DWORD Reserved;
+  BOOL Enabled;
+  DWORD ScanIntervalMs;
+  DWORD AlertThreshold;
+  DWORD CriticalThreshold;
+  BOOL WhitelistEnabled;
+  DWORD MaxAlertsPerMinute;
+  DWORD ProcessTreeRefreshMs;
 } WIN11MON_XP_CONFIG, *PWIN11MON_XP_CONFIG;
 #pragma pack(pop)
 
@@ -257,12 +258,10 @@ typedef struct _WIN11MON_XP_CONFIG {
  */
 DWORD
 WINAPI
-Win11MonXpGetSharedObjects(
-    _In_ HANDLE hDevice,
-    _Out_writes_bytes_to_(BufferSize, *pBytesWritten) PVOID pBuffer,
-    _In_ DWORD BufferSize,
-    _Out_ DWORD* pBytesWritten
-);
+Win11MonXpGetSharedObjects(_In_ HANDLE hDevice,
+                           _Out_writes_bytes_to_(BufferSize, *pBytesWritten)
+                               PVOID pBuffer,
+                           _In_ DWORD BufferSize, _Out_ DWORD* pBytesWritten);
 
 /*==========================================================================
  * Process Tree APIs
@@ -284,12 +283,10 @@ Win11MonXpGetSharedObjects(
  */
 DWORD
 WINAPI
-Win11MonXpGetProcessTree(
-    _In_ HANDLE hDevice,
-    _Out_writes_bytes_to_(BufferSize, *pBytesWritten) PVOID pBuffer,
-    _In_ DWORD BufferSize,
-    _Out_ DWORD* pBytesWritten
-);
+Win11MonXpGetProcessTree(_In_ HANDLE hDevice,
+                         _Out_writes_bytes_to_(BufferSize, *pBytesWritten)
+                             PVOID pBuffer,
+                         _In_ DWORD BufferSize, _Out_ DWORD* pBytesWritten);
 
 /*==========================================================================
  * Section Scanning APIs
@@ -313,13 +310,10 @@ Win11MonXpGetProcessTree(
  */
 DWORD
 WINAPI
-Win11MonXpScanSections(
-    _In_ HANDLE hDevice,
-    _In_ DWORD ProcessId,
-    _Out_writes_bytes_to_(BufferSize, *pBytesWritten) PVOID pBuffer,
-    _In_ DWORD BufferSize,
-    _Out_ DWORD* pBytesWritten
-);
+Win11MonXpScanSections(_In_ HANDLE hDevice, _In_ DWORD ProcessId,
+                       _Out_writes_bytes_to_(BufferSize, *pBytesWritten)
+                           PVOID pBuffer,
+                       _In_ DWORD BufferSize, _Out_ DWORD* pBytesWritten);
 
 /*==========================================================================
  * Alert APIs
@@ -341,12 +335,10 @@ Win11MonXpScanSections(
  */
 DWORD
 WINAPI
-Win11MonXpGetAlerts(
-    _In_ HANDLE hDevice,
-    _Out_writes_bytes_to_(BufferSize, *pBytesWritten) PVOID pBuffer,
-    _In_ DWORD BufferSize,
-    _Out_ DWORD* pBytesWritten
-);
+Win11MonXpGetAlerts(_In_ HANDLE hDevice,
+                    _Out_writes_bytes_to_(BufferSize, *pBytesWritten)
+                        PVOID pBuffer,
+                    _In_ DWORD BufferSize, _Out_ DWORD* pBytesWritten);
 
 /*==========================================================================
  * Statistics & Configuration APIs
@@ -365,10 +357,7 @@ Win11MonXpGetAlerts(
  */
 DWORD
 WINAPI
-Win11MonXpGetStats(
-    _In_ HANDLE hDevice,
-    _Out_ PWIN11MON_XP_STATS pStats
-);
+Win11MonXpGetStats(_In_ HANDLE hDevice, _Out_ PWIN11MON_XP_STATS pStats);
 
 /**
  * @function   Win11MonXpGetConfig
@@ -383,10 +372,7 @@ Win11MonXpGetStats(
  */
 DWORD
 WINAPI
-Win11MonXpGetConfig(
-    _In_ HANDLE hDevice,
-    _Out_ PWIN11MON_XP_CONFIG pConfig
-);
+Win11MonXpGetConfig(_In_ HANDLE hDevice, _Out_ PWIN11MON_XP_CONFIG pConfig);
 
 /**
  * @function   Win11MonXpSetConfig
@@ -402,10 +388,8 @@ Win11MonXpGetConfig(
  */
 DWORD
 WINAPI
-Win11MonXpSetConfig(
-    _In_ HANDLE hDevice,
-    _In_ const WIN11MON_XP_CONFIG* pConfig
-);
+Win11MonXpSetConfig(_In_ HANDLE hDevice,
+                    _In_ const WIN11MON_XP_CONFIG* pConfig);
 
 /**
  * @function   Win11MonXpScanNow
@@ -419,9 +403,7 @@ Win11MonXpSetConfig(
  */
 DWORD
 WINAPI
-Win11MonXpScanNow(
-    _In_ HANDLE hDevice
-);
+Win11MonXpScanNow(_In_ HANDLE hDevice);
 
 /*==========================================================================
  * Helper Functions
@@ -434,11 +416,8 @@ Win11MonXpScanNow(
  * @param[in]  AlertType - Alert type
  * @returns    Static string describing alert type
  */
-const WCHAR*
-WINAPI
-Win11MonXpAlertTypeToString(
-    _In_ WIN11MON_XP_ALERT_TYPE AlertType
-);
+const WCHAR* WINAPI
+Win11MonXpAlertTypeToString(_In_ WIN11MON_XP_ALERT_TYPE AlertType);
 
 /**
  * @function   Win11MonXpSeverityToString
@@ -447,11 +426,8 @@ Win11MonXpAlertTypeToString(
  * @param[in]  Severity - Severity level
  * @returns    Static string describing severity
  */
-const WCHAR*
-WINAPI
-Win11MonXpSeverityToString(
-    _In_ WIN11MON_XP_SEVERITY Severity
-);
+const WCHAR* WINAPI
+Win11MonXpSeverityToString(_In_ WIN11MON_XP_SEVERITY Severity);
 
 /**
  * @function   Win11MonXpRuleIdToString
@@ -460,11 +436,7 @@ Win11MonXpSeverityToString(
  * @param[in]  RuleId - Rule ID
  * @returns    Static string describing rule
  */
-const WCHAR*
-WINAPI
-Win11MonXpRuleIdToString(
-    _In_ WIN11MON_XP_RULE_ID RuleId
-);
+const WCHAR* WINAPI Win11MonXpRuleIdToString(_In_ WIN11MON_XP_RULE_ID RuleId);
 
 /**
  * @function   Win11MonXpIntegrityToString
@@ -473,11 +445,7 @@ Win11MonXpRuleIdToString(
  * @param[in]  IntegrityLevel - Integrity level RID
  * @returns    Static string describing integrity level
  */
-const WCHAR*
-WINAPI
-Win11MonXpIntegrityToString(
-    _In_ DWORD IntegrityLevel
-);
+const WCHAR* WINAPI Win11MonXpIntegrityToString(_In_ DWORD IntegrityLevel);
 
 #ifdef __cplusplus
 } /* extern "C" */

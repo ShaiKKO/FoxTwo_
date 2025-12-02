@@ -7,13 +7,14 @@
  * Version: 1.0
  * Date: 2025-12-01
  * Copyright:
- *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and confidential.
- *   Redistribution or disclosure without prior written consent is prohibited.
+ *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and
+ * confidential. Redistribution or disclosure without prior written consent is
+ * prohibited.
  *
  * Summary
  * -------
- * Provides dynamic structure offset resolution for cross-version Windows compatibility.
- * Implements a three-tier resolution strategy:
+ * Provides dynamic structure offset resolution for cross-version Windows
+ * compatibility. Implements a three-tier resolution strategy:
  *
  * 1. Embedded Tables (Primary)
  *    - Hardcoded offsets for known Windows builds
@@ -35,14 +36,15 @@
  *
  * References:
  * - KPDB: https://github.com/GetRektBoy724/KPDB
- * - Offset-Free DSE: https://blog.cryptoplague.net/main/research/windows-research/
+ * - Offset-Free DSE:
+ * https://blog.cryptoplague.net/main/research/windows-research/
  */
 
 #ifndef _ZIX_LABS_OFFSET_RESOLVER_H_
 #define _ZIX_LABS_OFFSET_RESOLVER_H_
 
 #ifndef _KERNEL_MODE
-# error "This header is for kernel-mode only."
+#error "This header is for kernel-mode only."
 #endif
 
 #include <ntddk.h>
@@ -56,16 +58,16 @@ extern "C" {
  *-------------------------------------------------------------------------*/
 
 /* Maximum structures tracked by resolver */
-#define MON_OFFSET_MAX_STRUCTURES       8
+#define MON_OFFSET_MAX_STRUCTURES 8
 
 /* Maximum fields per structure */
-#define MON_OFFSET_MAX_FIELDS           16
+#define MON_OFFSET_MAX_FIELDS 16
 
 /* Maximum structure/field name length */
-#define MON_OFFSET_MAX_NAME_LEN         64
+#define MON_OFFSET_MAX_NAME_LEN 64
 
 /* Build number tolerance for nearest-match fallback */
-#define MON_OFFSET_BUILD_TOLERANCE      500
+#define MON_OFFSET_BUILD_TOLERANCE 500
 
 /* Signature scan memory limit (16MB) */
 #define MON_OFFSET_SIGNATURE_SCAN_LIMIT (16 * 1024 * 1024)
@@ -76,21 +78,21 @@ extern "C" {
  * Indicates how an offset was determined.
  *-------------------------------------------------------------------------*/
 typedef enum _MON_OFFSET_SOURCE {
-    MonOffsetSource_Unknown     = 0,    /* Not yet resolved */
-    MonOffsetSource_Embedded    = 1,    /* From compiled-in table */
-    MonOffsetSource_Signature   = 2,    /* From memory signature scan */
-    MonOffsetSource_Override    = 3,    /* From admin override */
-    MonOffsetSource_Inferred    = 4     /* From nearest known build */
+  MonOffsetSource_Unknown = 0,   /* Not yet resolved */
+  MonOffsetSource_Embedded = 1,  /* From compiled-in table */
+  MonOffsetSource_Signature = 2, /* From memory signature scan */
+  MonOffsetSource_Override = 3,  /* From admin override */
+  MonOffsetSource_Inferred = 4   /* From nearest known build */
 } MON_OFFSET_SOURCE;
 
 /*--------------------------------------------------------------------------
  * Validation Status Enumeration
  *-------------------------------------------------------------------------*/
 typedef enum _MON_OFFSET_VALIDATION {
-    MonOffsetValidation_NotTested   = 0,    /* Not yet validated */
-    MonOffsetValidation_Passed      = 1,    /* Runtime validation passed */
-    MonOffsetValidation_Failed      = 2,    /* Runtime validation failed */
-    MonOffsetValidation_Skipped     = 3     /* Validation skipped (no test object) */
+  MonOffsetValidation_NotTested = 0, /* Not yet validated */
+  MonOffsetValidation_Passed = 1,    /* Runtime validation passed */
+  MonOffsetValidation_Failed = 2,    /* Runtime validation failed */
+  MonOffsetValidation_Skipped = 3    /* Validation skipped (no test object) */
 } MON_OFFSET_VALIDATION;
 
 /*--------------------------------------------------------------------------
@@ -99,11 +101,11 @@ typedef enum _MON_OFFSET_VALIDATION {
  * Represents a single field offset within a structure.
  *-------------------------------------------------------------------------*/
 typedef struct _MON_RESOLVED_OFFSET {
-    CHAR                    FieldName[MON_OFFSET_MAX_NAME_LEN];
-    ULONG                   Offset;         /* Byte offset from structure start */
-    ULONG                   Size;           /* Field size in bytes (0 if unknown) */
-    MON_OFFSET_SOURCE       Source;         /* How this offset was determined */
-    MON_OFFSET_VALIDATION   Validation;     /* Runtime validation status */
+  CHAR FieldName[MON_OFFSET_MAX_NAME_LEN];
+  ULONG Offset;                     /* Byte offset from structure start */
+  ULONG Size;                       /* Field size in bytes (0 if unknown) */
+  MON_OFFSET_SOURCE Source;         /* How this offset was determined */
+  MON_OFFSET_VALIDATION Validation; /* Runtime validation status */
 } MON_RESOLVED_OFFSET, *PMON_RESOLVED_OFFSET;
 
 /*--------------------------------------------------------------------------
@@ -112,14 +114,14 @@ typedef struct _MON_RESOLVED_OFFSET {
  * Contains all resolved offsets for a single structure type.
  *-------------------------------------------------------------------------*/
 typedef struct _MON_STRUCTURE_OFFSETS {
-    CHAR                    StructureName[MON_OFFSET_MAX_NAME_LEN];
-    ULONG                   StructureSize;  /* Total structure size (0 if unknown) */
-    ULONG                   TargetBuild;    /* Windows build this was resolved for */
-    ULONG                   SourceBuild;    /* Build the offsets came from */
-    MON_OFFSET_SOURCE       OverallSource;  /* Primary resolution method used */
-    MON_OFFSET_VALIDATION   OverallValidation;
-    ULONG                   FieldCount;     /* Number of fields resolved */
-    MON_RESOLVED_OFFSET     Fields[MON_OFFSET_MAX_FIELDS];
+  CHAR StructureName[MON_OFFSET_MAX_NAME_LEN];
+  ULONG StructureSize;             /* Total structure size (0 if unknown) */
+  ULONG TargetBuild;               /* Windows build this was resolved for */
+  ULONG SourceBuild;               /* Build the offsets came from */
+  MON_OFFSET_SOURCE OverallSource; /* Primary resolution method used */
+  MON_OFFSET_VALIDATION OverallValidation;
+  ULONG FieldCount; /* Number of fields resolved */
+  MON_RESOLVED_OFFSET Fields[MON_OFFSET_MAX_FIELDS];
 } MON_STRUCTURE_OFFSETS, *PMON_STRUCTURE_OFFSETS;
 
 /*--------------------------------------------------------------------------
@@ -128,11 +130,11 @@ typedef struct _MON_STRUCTURE_OFFSETS {
  * Passed to MonOffsetResolverInitialize to configure behavior.
  *-------------------------------------------------------------------------*/
 typedef struct _MON_OFFSET_RESOLVER_CONFIG {
-    ULONG                   Size;               /* Must be sizeof(MON_OFFSET_RESOLVER_CONFIG) */
-    BOOLEAN                 EnableSignatureScan;/* Allow signature-based fallback */
-    BOOLEAN                 EnableInference;    /* Allow nearest-build inference */
-    BOOLEAN                 RequireValidation;  /* Fail if validation cannot pass */
-    ULONG                   BuildTolerance;     /* Max build number delta for inference */
+  ULONG Size;                  /* Must be sizeof(MON_OFFSET_RESOLVER_CONFIG) */
+  BOOLEAN EnableSignatureScan; /* Allow signature-based fallback */
+  BOOLEAN EnableInference;     /* Allow nearest-build inference */
+  BOOLEAN RequireValidation;   /* Fail if validation cannot pass */
+  ULONG BuildTolerance;        /* Max build number delta for inference */
 } MON_OFFSET_RESOLVER_CONFIG, *PMON_OFFSET_RESOLVER_CONFIG;
 
 /*--------------------------------------------------------------------------
@@ -141,16 +143,16 @@ typedef struct _MON_OFFSET_RESOLVER_CONFIG {
  * Runtime statistics about offset resolution.
  *-------------------------------------------------------------------------*/
 typedef struct _MON_OFFSET_RESOLVER_STATS {
-    ULONG                   Size;               /* sizeof(MON_OFFSET_RESOLVER_STATS) */
-    ULONG                   CurrentBuild;       /* Running Windows build */
-    ULONG                   StructuresRegistered;   /* Structures with offsets */
-    ULONG                   StructuresValidated;    /* Structures validated */
-    ULONG                   EmbeddedHits;       /* Resolutions from embedded */
-    ULONG                   SignatureHits;      /* Resolutions from signature */
-    ULONG                   InferenceHits;      /* Resolutions from inference */
-    ULONG                   ValidationFailures; /* Validation test failures */
-    BOOLEAN                 Initialized;        /* Resolver initialized */
-    BOOLEAN                 Degraded;           /* Operating in degraded mode */
+  ULONG Size;                 /* sizeof(MON_OFFSET_RESOLVER_STATS) */
+  ULONG CurrentBuild;         /* Running Windows build */
+  ULONG StructuresRegistered; /* Structures with offsets */
+  ULONG StructuresValidated;  /* Structures validated */
+  ULONG EmbeddedHits;         /* Resolutions from embedded */
+  ULONG SignatureHits;        /* Resolutions from signature */
+  ULONG InferenceHits;        /* Resolutions from inference */
+  ULONG ValidationFailures;   /* Validation test failures */
+  BOOLEAN Initialized;        /* Resolver initialized */
+  BOOLEAN Degraded;           /* Operating in degraded mode */
 } MON_OFFSET_RESOLVER_STATS, *PMON_OFFSET_RESOLVER_STATS;
 
 /*--------------------------------------------------------------------------
@@ -158,16 +160,16 @@ typedef struct _MON_OFFSET_RESOLVER_STATS {
  *
  * String constants for common structures resolved by this module.
  *-------------------------------------------------------------------------*/
-#define MON_STRUCT_IORING_OBJECT        "_IORING_OBJECT"
-#define MON_STRUCT_IOP_MC_BUFFER_ENTRY  "_IOP_MC_BUFFER_ENTRY"
+#define MON_STRUCT_IORING_OBJECT       "_IORING_OBJECT"
+#define MON_STRUCT_IOP_MC_BUFFER_ENTRY "_IOP_MC_BUFFER_ENTRY"
 
 /*--------------------------------------------------------------------------
  * Well-Known Field Names
  *-------------------------------------------------------------------------*/
-#define MON_FIELD_REGBUFFERS_COUNT      "RegBuffersCount"
-#define MON_FIELD_REGBUFFERS            "RegBuffers"
-#define MON_FIELD_REGFILES_COUNT        "RegFilesCount"
-#define MON_FIELD_REGFILES              "RegFiles"
+#define MON_FIELD_REGBUFFERS_COUNT "RegBuffersCount"
+#define MON_FIELD_REGBUFFERS       "RegBuffers"
+#define MON_FIELD_REGFILES_COUNT   "RegFilesCount"
+#define MON_FIELD_REGFILES         "RegFiles"
 
 /*--------------------------------------------------------------------------
  * Public Function Prototypes
@@ -185,10 +187,8 @@ typedef struct _MON_OFFSET_RESOLVER_STATS {
  * @returns   STATUS_SUCCESS on success
  *            STATUS_INSUFFICIENT_RESOURCES on allocation failure
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS MonOffsetResolverInitialize(
-    _In_opt_ const MON_OFFSET_RESOLVER_CONFIG* Config
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonOffsetResolverInitialize(_In_opt_ const MON_OFFSET_RESOLVER_CONFIG *Config);
 
 /**
  * @function   MonOffsetResolverShutdown
@@ -198,8 +198,7 @@ NTSTATUS MonOffsetResolverInitialize(
  * @thread-safety Single-threaded shutdown
  * @side-effects Frees internal tables
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-VOID MonOffsetResolverShutdown(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) VOID MonOffsetResolverShutdown(VOID);
 
 /**
  * @function   MonOffsetResolverIsInitialized
@@ -209,8 +208,7 @@ VOID MonOffsetResolverShutdown(VOID);
  * @thread-safety Thread-safe read-only
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-BOOLEAN MonOffsetResolverIsInitialized(VOID);
+_IRQL_requires_max_(DISPATCH_LEVEL) BOOLEAN MonOffsetResolverIsInitialized(VOID);
 
 /**
  * @function   MonGetStructureOffsets
@@ -226,11 +224,8 @@ BOOLEAN MonOffsetResolverIsInitialized(VOID);
  *            STATUS_NOT_FOUND if structure not registered
  *            STATUS_NOT_SUPPORTED if resolver not initialized
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-NTSTATUS MonGetStructureOffsets(
-    _In_z_ const CHAR* StructureName,
-    _Out_ PMON_STRUCTURE_OFFSETS Offsets
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) NTSTATUS
+    MonGetStructureOffsets(_In_z_ const CHAR *StructureName, _Out_ PMON_STRUCTURE_OFFSETS Offsets);
 
 /**
  * @function   MonGetFieldOffset
@@ -246,12 +241,9 @@ NTSTATUS MonGetStructureOffsets(
  * @returns   STATUS_SUCCESS if found
  *            STATUS_NOT_FOUND if structure or field not found
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-NTSTATUS MonGetFieldOffset(
-    _In_z_ const CHAR* StructureName,
-    _In_z_ const CHAR* FieldName,
-    _Out_ PULONG Offset
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) NTSTATUS
+    MonGetFieldOffset(_In_z_ const CHAR *StructureName, _In_z_ const CHAR *FieldName,
+                      _Out_ PULONG Offset);
 
 /**
  * @function   MonGetFieldOffsetWithSize
@@ -261,13 +253,9 @@ NTSTATUS MonGetFieldOffset(
  * @thread-safety Thread-safe read-only
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-NTSTATUS MonGetFieldOffsetWithSize(
-    _In_z_ const CHAR* StructureName,
-    _In_z_ const CHAR* FieldName,
-    _Out_ PULONG Offset,
-    _Out_ PULONG Size
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) NTSTATUS
+    MonGetFieldOffsetWithSize(_In_z_ const CHAR *StructureName, _In_z_ const CHAR *FieldName,
+                              _Out_ PULONG Offset, _Out_ PULONG Size);
 
 /**
  * @function   MonGetOffsetSource
@@ -277,10 +265,8 @@ NTSTATUS MonGetFieldOffsetWithSize(
  * @thread-safety Thread-safe read-only
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-MON_OFFSET_SOURCE MonGetOffsetSource(
-    _In_z_ const CHAR* StructureName
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) MON_OFFSET_SOURCE
+    MonGetOffsetSource(_In_z_ const CHAR *StructureName);
 
 /**
  * @function   MonAreOffsetsValidated
@@ -290,10 +276,8 @@ MON_OFFSET_SOURCE MonGetOffsetSource(
  * @thread-safety Thread-safe read-only
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-BOOLEAN MonAreOffsetsValidated(
-    _In_z_ const CHAR* StructureName
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) BOOLEAN
+    MonAreOffsetsValidated(_In_z_ const CHAR *StructureName);
 
 /**
  * @function   MonValidateStructureOffsets
@@ -309,11 +293,8 @@ BOOLEAN MonAreOffsetsValidated(
  *            STATUS_UNSUCCESSFUL if validation failed
  *            STATUS_NOT_FOUND if structure not registered
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS MonValidateStructureOffsets(
-    _In_z_ const CHAR* StructureName,
-    _In_ PVOID TestObject
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonValidateStructureOffsets(_In_z_ const CHAR *StructureName, _In_ PVOID TestObject);
 
 /**
  * @function   MonOffsetResolverGetStats
@@ -323,10 +304,8 @@ NTSTATUS MonValidateStructureOffsets(
  * @thread-safety Thread-safe snapshot
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-VOID MonOffsetResolverGetStats(
-    _Out_ PMON_OFFSET_RESOLVER_STATS Stats
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) VOID
+    MonOffsetResolverGetStats(_Out_ PMON_OFFSET_RESOLVER_STATS Stats);
 
 /**
  * @function   MonRegisterStructureOffsets
@@ -340,10 +319,8 @@ VOID MonOffsetResolverGetStats(
  * @returns   STATUS_SUCCESS on success
  *            STATUS_QUOTA_EXCEEDED if too many structures registered
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS MonRegisterStructureOffsets(
-    _In_ const MON_STRUCTURE_OFFSETS* Offsets
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonRegisterStructureOffsets(_In_ const MON_STRUCTURE_OFFSETS *Offsets);
 
 /**
  * @function   MonOffsetResolverSetDegraded
@@ -353,10 +330,7 @@ NTSTATUS MonRegisterStructureOffsets(
  * @thread-safety Thread-safe
  * @side-effects Emits ETW event
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-VOID MonOffsetResolverSetDegraded(
-    _In_ BOOLEAN Degraded
-);
+_IRQL_requires_(PASSIVE_LEVEL) VOID MonOffsetResolverSetDegraded(_In_ BOOLEAN Degraded);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -7,8 +7,9 @@
  * Version: 1.0
  * Date: 2025-11-30
  * Copyright:
- *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and confidential.
- *   Redistribution or disclosure without prior written consent is prohibited.
+ *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and
+ * confidential. Redistribution or disclosure without prior written consent is
+ * prohibited.
  *
  * Summary
  * -------
@@ -31,10 +32,11 @@
 #define _ZIX_LABS_ANOMALY_RULES_H_
 
 #ifndef _KERNEL_MODE
-# error "This header is for kernel-mode only."
+#error "This header is for kernel-mode only."
 #endif
 
 #include <ntddk.h>
+
 #include "process_profile.h"
 
 #ifdef __cplusplus
@@ -44,8 +46,8 @@ extern "C" {
 /*--------------------------------------------------------------------------
  * Configuration Constants
  *-------------------------------------------------------------------------*/
-#define MON_ANOMALY_MAX_RULES       32      /* Maximum simultaneous rules */
-#define MON_ANOMALY_MAX_RESULTS     16      /* Max results per evaluation */
+#define MON_ANOMALY_MAX_RULES   32 /* Maximum simultaneous rules */
+#define MON_ANOMALY_MAX_RESULTS 16 /* Max results per evaluation */
 
 /*--------------------------------------------------------------------------
  * Extended Anomaly Rule Structure (with score impact)
@@ -59,15 +61,15 @@ extern "C" {
 
 /* Re-define with ScoreImpact for internal use */
 typedef struct _MON_ANOMALY_RULE {
-    MON_ANOMALY_RULE_ID  RuleId;
-    WCHAR                RuleName[32];
-    ULONG                Threshold;          /* Rule-specific threshold */
-    ULONG                WindowSeconds;      /* Evaluation window */
-    MON_ANOMALY_SEVERITY Severity;
-    ULONG                ScoreImpact;        /* Anomaly score increase */
-    BOOLEAN              Enabled;
-    BOOLEAN              Reserved[3];
-    CHAR                 MitreTechnique[16]; /* e.g., "T1055" */
+  MON_ANOMALY_RULE_ID RuleId;
+  WCHAR RuleName[32];
+  ULONG Threshold;     /* Rule-specific threshold */
+  ULONG WindowSeconds; /* Evaluation window */
+  MON_ANOMALY_SEVERITY Severity;
+  ULONG ScoreImpact; /* Anomaly score increase */
+  BOOLEAN Enabled;
+  BOOLEAN Reserved[3];
+  CHAR MitreTechnique[16]; /* e.g., "T1055" */
 } MON_ANOMALY_RULE, *PMON_ANOMALY_RULE;
 
 #endif /* MON_ANOMALY_RULE_EXTENDED */
@@ -76,11 +78,11 @@ typedef struct _MON_ANOMALY_RULE {
  * Anomaly Evaluation Result
  *-------------------------------------------------------------------------*/
 typedef struct _MON_ANOMALY_RESULT {
-    MON_ANOMALY_RULE_ID  RuleId;
-    ULONG                Threshold;
-    ULONG                ActualValue;
-    MON_ANOMALY_SEVERITY Severity;
-    ULONG                ScoreImpact;
+  MON_ANOMALY_RULE_ID RuleId;
+  ULONG Threshold;
+  ULONG ActualValue;
+  MON_ANOMALY_SEVERITY Severity;
+  ULONG ScoreImpact;
 } MON_ANOMALY_RESULT, *PMON_ANOMALY_RESULT;
 
 C_ASSERT(sizeof(MON_ANOMALY_RESULT) == 20);
@@ -89,12 +91,12 @@ C_ASSERT(sizeof(MON_ANOMALY_RESULT) == 20);
  * Anomaly Statistics
  *-------------------------------------------------------------------------*/
 typedef struct _MON_ANOMALY_STATS {
-    ULONG   Size;
-    ULONG   TotalRules;
-    ULONG   EnabledRules;
-    ULONG   TotalEvaluations;
-    ULONG   TotalMatches;
-    ULONG   Reserved;
+  ULONG Size;
+  ULONG TotalRules;
+  ULONG EnabledRules;
+  ULONG TotalEvaluations;
+  ULONG TotalMatches;
+  ULONG Reserved;
 } MON_ANOMALY_STATS, *PMON_ANOMALY_STATS;
 
 C_ASSERT(sizeof(MON_ANOMALY_STATS) == 24);
@@ -111,8 +113,7 @@ C_ASSERT(sizeof(MON_ANOMALY_STATS) == 24);
  * @returns    STATUS_SUCCESS on success
  * @thread-safety Single-threaded init
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS MonAnomalyInitialize(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS MonAnomalyInitialize(VOID);
 
 /**
  * @function   MonAnomalyShutdown
@@ -121,8 +122,7 @@ NTSTATUS MonAnomalyInitialize(VOID);
  * @postcondition Engine unavailable
  * @thread-safety Single-threaded shutdown
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-VOID MonAnomalyShutdown(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) VOID MonAnomalyShutdown(VOID);
 
 /**
  * @function   MonAnomalyIsInitialized
@@ -131,8 +131,7 @@ VOID MonAnomalyShutdown(VOID);
  * @returns    TRUE if initialized
  * @thread-safety Lock-free read
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-BOOLEAN MonAnomalyIsInitialized(VOID);
+_IRQL_requires_max_(DISPATCH_LEVEL) BOOLEAN MonAnomalyIsInitialized(VOID);
 
 /**
  * @function   MonAnomalyEvaluate
@@ -148,15 +147,11 @@ BOOLEAN MonAnomalyIsInitialized(VOID);
  *
  * @thread-safety Lock-free evaluation
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-ULONG
-MonAnomalyEvaluate(
-    _In_ const MON_PROCESS_PROFILE* Profile,
-    _In_ ULONG OpsPerSecond,
-    _Out_opt_ ULONG* TriggeredRules,
-    _Out_writes_opt_(MaxResults) MON_ANOMALY_RESULT* Results,
-    _In_ ULONG MaxResults
-);
+_IRQL_requires_(PASSIVE_LEVEL) ULONG
+    MonAnomalyEvaluate(_In_ const MON_PROCESS_PROFILE *Profile, _In_ ULONG OpsPerSecond,
+                       _Out_opt_ ULONG *TriggeredRules,
+                       _Out_writes_opt_(MaxResults) MON_ANOMALY_RESULT *Results,
+                       _In_ ULONG MaxResults);
 
 /**
  * @function   MonAnomalyGetRule
@@ -170,12 +165,8 @@ MonAnomalyEvaluate(
  *
  * @thread-safety FAST_MUTEX protected
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS
-MonAnomalyGetRule(
-    _In_ MON_ANOMALY_RULE_ID RuleId,
-    _Out_ PMON_ANOMALY_RULE Rule
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonAnomalyGetRule(_In_ MON_ANOMALY_RULE_ID RuleId, _Out_ PMON_ANOMALY_RULE Rule);
 
 /**
  * @function   MonAnomalySetThreshold
@@ -189,12 +180,8 @@ MonAnomalyGetRule(
  *
  * @thread-safety FAST_MUTEX protected
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS
-MonAnomalySetThreshold(
-    _In_ MON_ANOMALY_RULE_ID RuleId,
-    _In_ ULONG Threshold
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonAnomalySetThreshold(_In_ MON_ANOMALY_RULE_ID RuleId, _In_ ULONG Threshold);
 
 /**
  * @function   MonAnomalyEnableRule
@@ -208,12 +195,8 @@ MonAnomalySetThreshold(
  *
  * @thread-safety FAST_MUTEX protected
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS
-MonAnomalyEnableRule(
-    _In_ MON_ANOMALY_RULE_ID RuleId,
-    _In_ BOOLEAN Enable
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonAnomalyEnableRule(_In_ MON_ANOMALY_RULE_ID RuleId, _In_ BOOLEAN Enable);
 
 /**
  * @function   MonAnomalyAddRule
@@ -227,11 +210,7 @@ MonAnomalyEnableRule(
  *
  * @thread-safety FAST_MUTEX protected
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS
-MonAnomalyAddRule(
-    _In_ const MON_ANOMALY_RULE* NewRule
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS MonAnomalyAddRule(_In_ const MON_ANOMALY_RULE *NewRule);
 
 /**
  * @function   MonAnomalyEnumerateRules
@@ -245,13 +224,9 @@ MonAnomalyAddRule(
  *
  * @thread-safety FAST_MUTEX protected
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS
-MonAnomalyEnumerateRules(
-    _Out_writes_to_(MaxCount, *ActualCount) PMON_ANOMALY_RULE Buffer,
-    _In_ ULONG MaxCount,
-    _Out_ ULONG* ActualCount
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonAnomalyEnumerateRules(_Out_writes_to_(MaxCount, *ActualCount) PMON_ANOMALY_RULE Buffer,
+                             _In_ ULONG MaxCount, _Out_ ULONG *ActualCount);
 
 /**
  * @function   MonAnomalyGetRuleCount
@@ -260,8 +235,7 @@ MonAnomalyEnumerateRules(
  * @returns    Number of rules
  * @thread-safety Lock-free read
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-ULONG MonAnomalyGetRuleCount(VOID);
+_IRQL_requires_max_(DISPATCH_LEVEL) ULONG MonAnomalyGetRuleCount(VOID);
 
 /**
  * @function   MonAnomalyGetStats
@@ -271,11 +245,7 @@ ULONG MonAnomalyGetRuleCount(VOID);
  * @param[out] Stats - Output buffer
  * @thread-safety Lock-free counter reads
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-VOID
-MonAnomalyGetStats(
-    _Out_ PMON_ANOMALY_STATS Stats
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) VOID MonAnomalyGetStats(_Out_ PMON_ANOMALY_STATS Stats);
 
 /**
  * @function   MonAnomalyResetStats
@@ -283,8 +253,7 @@ MonAnomalyGetStats(
  * @precondition IRQL == PASSIVE_LEVEL
  * @thread-safety Interlocked operations
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-VOID MonAnomalyResetStats(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) VOID MonAnomalyResetStats(VOID);
 
 #ifdef __cplusplus
 } /* extern "C" */

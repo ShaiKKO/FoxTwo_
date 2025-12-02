@@ -7,8 +7,9 @@
  * Version: 1.1
  * Date: 2025-12-01
  * Copyright:
- *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and confidential.
- *   Redistribution or disclosure without prior written consent is prohibited.
+ *   (c) 2025 ziX Performance Labs. All rights reserved. Proprietary and
+ * confidential. Redistribution or disclosure without prior written consent is
+ * prohibited.
  *
  * Summary
  * -------
@@ -24,18 +25,21 @@
  *
  * References:
  * - Microsoft VirtualSerial2 ringbuffer.h sample
- * - Win-Kernel-Logger lock-free design: https://github.com/stuxnet147/Win-Kernel-Logger
- * - ETW circular buffer: https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties
+ * - Win-Kernel-Logger lock-free design:
+ * https://github.com/stuxnet147/Win-Kernel-Logger
+ * - ETW circular buffer:
+ * https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties
  */
 
 #ifndef _ZIX_LABS_TELEMETRY_RINGBUF_H_
 #define _ZIX_LABS_TELEMETRY_RINGBUF_H_
 
 #ifndef _KERNEL_MODE
-# error "This header is for kernel-mode only."
+#error "This header is for kernel-mode only."
 #endif
 
 #include <ntddk.h>
+
 #include "win11_monitor_mgr.h"
 
 #ifdef __cplusplus
@@ -47,22 +51,22 @@ extern "C" {
  *-------------------------------------------------------------------------*/
 
 /* Default buffer size: 1MB provides ~60 seconds at 1000 events/sec */
-#define MON_RINGBUF_DEFAULT_SIZE        (1024 * 1024)
+#define MON_RINGBUF_DEFAULT_SIZE (1024 * 1024)
 
 /* Minimum buffer size: 64KB allows ~100 events minimum */
-#define MON_RINGBUF_MIN_SIZE            (64 * 1024)
+#define MON_RINGBUF_MIN_SIZE (64 * 1024)
 
 /* Maximum buffer size: 16MB to prevent excessive NonPaged consumption */
-#define MON_RINGBUF_MAX_SIZE            (16 * 1024 * 1024)
+#define MON_RINGBUF_MAX_SIZE (16 * 1024 * 1024)
 
 /* Event alignment: 8-byte for atomic operations */
-#define MON_RINGBUF_ALIGNMENT           8
+#define MON_RINGBUF_ALIGNMENT 8
 
 /* Magic value for event validation */
-#define MON_RING_EVENT_MAGIC            0x54564552  /* 'REVT' */
+#define MON_RING_EVENT_MAGIC 0x54564552 /* 'REVT' */
 
 /* Maximum single event size: 4KB reasonable for most payloads */
-#define MON_RING_MAX_EVENT_SIZE         (4 * 1024)
+#define MON_RING_MAX_EVENT_SIZE (4 * 1024)
 
 /*--------------------------------------------------------------------------
  * Ring Buffer Event Header
@@ -71,16 +75,16 @@ extern "C" {
  * Total event size = sizeof(MON_RING_EVENT_HEADER) + PayloadSize + padding
  *-------------------------------------------------------------------------*/
 typedef struct _MON_RING_EVENT_HEADER {
-    ULONG               Magic;          /* MON_RING_EVENT_MAGIC for validation */
-    ULONG               TotalSize;      /* Total bytes including header and padding */
-    ULONG               PayloadSize;    /* Actual payload bytes */
-    MONITOR_EVENT_TYPE  EventType;      /* Event type enum */
-    LARGE_INTEGER       Timestamp;      /* KeQuerySystemTime timestamp */
-    ULONG               ProcessId;      /* Source process ID */
-    ULONG               ThreadId;       /* Source thread ID */
-    ULONG               SequenceNumber; /* Monotonic sequence for ordering */
-    ULONG               Reserved;       /* Alignment padding */
-    /* Payload follows immediately */
+  ULONG Magic;                  /* MON_RING_EVENT_MAGIC for validation */
+  ULONG TotalSize;              /* Total bytes including header and padding */
+  ULONG PayloadSize;            /* Actual payload bytes */
+  MONITOR_EVENT_TYPE EventType; /* Event type enum */
+  LARGE_INTEGER Timestamp;      /* KeQuerySystemTime timestamp */
+  ULONG ProcessId;              /* Source process ID */
+  ULONG ThreadId;               /* Source thread ID */
+  ULONG SequenceNumber;         /* Monotonic sequence for ordering */
+  ULONG Reserved;               /* Alignment padding */
+                                /* Payload follows immediately */
 } MON_RING_EVENT_HEADER, *PMON_RING_EVENT_HEADER;
 
 C_ASSERT(sizeof(MON_RING_EVENT_HEADER) == 40);
@@ -90,17 +94,17 @@ C_ASSERT((sizeof(MON_RING_EVENT_HEADER) % MON_RINGBUF_ALIGNMENT) == 0);
  * Ring Buffer Statistics
  *-------------------------------------------------------------------------*/
 typedef struct _MON_RING_BUFFER_STATS {
-    ULONG               Size;               /* sizeof(MON_RING_BUFFER_STATS) */
-    ULONG               BufferSizeBytes;    /* Total buffer allocation */
-    ULONG               UsedBytes;          /* Bytes currently used */
-    ULONG               FreeBytes;          /* Bytes available */
-    ULONG               EventCount;         /* Events in buffer */
-    ULONG               TotalEventsWritten; /* Lifetime event count */
-    ULONG               EventsOverwritten;  /* Events lost to overwrite */
-    ULONG               EventsDropped;      /* Events dropped (too large, etc) */
-    ULONG               WrapCount;          /* Buffer wrap-around count */
-    LARGE_INTEGER       OldestTimestamp;    /* Oldest event timestamp */
-    LARGE_INTEGER       NewestTimestamp;    /* Newest event timestamp */
+  ULONG Size;                    /* sizeof(MON_RING_BUFFER_STATS) */
+  ULONG BufferSizeBytes;         /* Total buffer allocation */
+  ULONG UsedBytes;               /* Bytes currently used */
+  ULONG FreeBytes;               /* Bytes available */
+  ULONG EventCount;              /* Events in buffer */
+  ULONG TotalEventsWritten;      /* Lifetime event count */
+  ULONG EventsOverwritten;       /* Events lost to overwrite */
+  ULONG EventsDropped;           /* Events dropped (too large, etc) */
+  ULONG WrapCount;               /* Buffer wrap-around count */
+  LARGE_INTEGER OldestTimestamp; /* Oldest event timestamp */
+  LARGE_INTEGER NewestTimestamp; /* Newest event timestamp */
 } MON_RING_BUFFER_STATS, *PMON_RING_BUFFER_STATS;
 
 /*--------------------------------------------------------------------------
@@ -109,25 +113,25 @@ typedef struct _MON_RING_BUFFER_STATS {
  * Returned at start of snapshot buffer to describe contents.
  *-------------------------------------------------------------------------*/
 typedef struct _MON_RING_SNAPSHOT_HEADER {
-    ULONG               Size;               /* sizeof(MON_RING_SNAPSHOT_HEADER) */
-    ULONG               EventCount;         /* Events in snapshot */
-    ULONG               TotalBytes;         /* Total bytes including header */
-    ULONG               Flags;              /* Reserved flags */
-    LARGE_INTEGER       SnapshotTime;       /* When snapshot was taken */
-    LARGE_INTEGER       OldestEventTime;    /* Oldest event timestamp */
-    LARGE_INTEGER       NewestEventTime;    /* Newest event timestamp */
-    ULONG               FirstSequence;      /* First event sequence number */
-    ULONG               LastSequence;       /* Last event sequence number */
-    /* Events follow immediately */
+  ULONG Size;                    /* sizeof(MON_RING_SNAPSHOT_HEADER) */
+  ULONG EventCount;              /* Events in snapshot */
+  ULONG TotalBytes;              /* Total bytes including header */
+  ULONG Flags;                   /* Reserved flags */
+  LARGE_INTEGER SnapshotTime;    /* When snapshot was taken */
+  LARGE_INTEGER OldestEventTime; /* Oldest event timestamp */
+  LARGE_INTEGER NewestEventTime; /* Newest event timestamp */
+  ULONG FirstSequence;           /* First event sequence number */
+  ULONG LastSequence;            /* Last event sequence number */
+                                 /* Events follow immediately */
 } MON_RING_SNAPSHOT_HEADER, *PMON_RING_SNAPSHOT_HEADER;
 
 /*--------------------------------------------------------------------------
  * Ring Buffer Configuration (for IOCTL_MONITOR_RINGBUF_CONFIGURE)
  *-------------------------------------------------------------------------*/
 typedef struct _MON_RINGBUF_CONFIG_INPUT {
-    ULONG               Size;               /* Must be sizeof(MON_RINGBUF_CONFIG_INPUT) */
-    ULONG               BufferSizeBytes;    /* 0 = use default */
-    ULONG               Flags;              /* Reserved, must be 0 */
+  ULONG Size;            /* Must be sizeof(MON_RINGBUF_CONFIG_INPUT) */
+  ULONG BufferSizeBytes; /* 0 = use default */
+  ULONG Flags;           /* Reserved, must be 0 */
 } MON_RINGBUF_CONFIG_INPUT, *PMON_RINGBUF_CONFIG_INPUT;
 
 /*--------------------------------------------------------------------------
@@ -143,15 +147,13 @@ typedef struct _MON_RINGBUF_CONFIG_INPUT {
  * @side-effects Allocates NonPaged pool memory
  *
  * @param[in] BufferSizeBytes - Size in bytes, or 0 for default (1MB)
- *                              Clamped to [MON_RINGBUF_MIN_SIZE, MON_RINGBUF_MAX_SIZE]
+ *                              Clamped to [MON_RINGBUF_MIN_SIZE,
+ * MON_RINGBUF_MAX_SIZE]
  * @returns   STATUS_SUCCESS on success
  *            STATUS_INSUFFICIENT_RESOURCES if allocation fails
  *            STATUS_INVALID_PARAMETER if size out of range
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS MonRingBufferInitialize(
-    _In_ ULONG BufferSizeBytes
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS MonRingBufferInitialize(_In_ ULONG BufferSizeBytes);
 
 /**
  * @function   MonRingBufferShutdown
@@ -161,8 +163,7 @@ NTSTATUS MonRingBufferInitialize(
  * @thread-safety Single-threaded shutdown
  * @side-effects Frees NonPaged pool memory
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-VOID MonRingBufferShutdown(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) VOID MonRingBufferShutdown(VOID);
 
 /**
  * @function   MonRingBufferIsInitialized
@@ -172,15 +173,15 @@ VOID MonRingBufferShutdown(VOID);
  * @thread-safety Thread-safe read-only
  * @side-effects None
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-BOOLEAN MonRingBufferIsInitialized(VOID);
+_IRQL_requires_max_(DISPATCH_LEVEL) BOOLEAN MonRingBufferIsInitialized(VOID);
 
 /**
  * @function   MonRingBufferWrite
  * @purpose    Write an event to the ring buffer (lock-free for single writer)
  * @precondition IRQL <= DISPATCH_LEVEL; Ring buffer initialized
  * @postcondition Event stored in ring buffer, oldest overwritten if full
- * @thread-safety Lock-free single-writer; concurrent writes require external sync
+ * @thread-safety Lock-free single-writer; concurrent writes require external
+ * sync
  * @side-effects May overwrite oldest events; updates statistics
  *
  * @param[in] EventType - Event type classification
@@ -190,12 +191,10 @@ BOOLEAN MonRingBufferIsInitialized(VOID);
  *            STATUS_NOT_SUPPORTED if ring buffer not initialized
  *            STATUS_BUFFER_OVERFLOW if event too large for buffer
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-NTSTATUS MonRingBufferWrite(
-    _In_ MONITOR_EVENT_TYPE EventType,
-    _In_reads_bytes_opt_(PayloadSize) const VOID* Payload,
-    _In_ ULONG PayloadSize
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) NTSTATUS
+    MonRingBufferWrite(_In_ MONITOR_EVENT_TYPE EventType,
+                       _In_reads_bytes_opt_(PayloadSize) const VOID *Payload,
+                       _In_ ULONG PayloadSize);
 
 /**
  * @function   MonRingBufferRead
@@ -213,13 +212,9 @@ NTSTATUS MonRingBufferWrite(
  *            STATUS_NOT_SUPPORTED if ring buffer not initialized
  *            STATUS_BUFFER_TOO_SMALL if no events fit in buffer
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS MonRingBufferRead(
-    _Out_writes_bytes_to_(BufferSize, *BytesRead) PVOID OutputBuffer,
-    _In_ ULONG BufferSize,
-    _Out_ PULONG BytesRead,
-    _Out_ PULONG EventCount
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonRingBufferRead(_Out_writes_bytes_to_(BufferSize, *BytesRead) PVOID OutputBuffer,
+                      _In_ ULONG BufferSize, _Out_ PULONG BytesRead, _Out_ PULONG EventCount);
 
 /**
  * @function   MonRingBufferSnapshot
@@ -229,19 +224,17 @@ NTSTATUS MonRingBufferRead(
  * @thread-safety Multi-reader safe via internal spinlock
  * @side-effects None (read-only operation)
  *
- * @param[out] OutputBuffer - Buffer to receive snapshot (starts with MON_RING_SNAPSHOT_HEADER)
+ * @param[out] OutputBuffer - Buffer to receive snapshot (starts with
+ * MON_RING_SNAPSHOT_HEADER)
  * @param[in] BufferSize - Size of output buffer in bytes
  * @param[out] BytesWritten - Actual bytes written including header
  * @returns   STATUS_SUCCESS on success
  *            STATUS_NOT_SUPPORTED if ring buffer not initialized
  *            STATUS_BUFFER_TOO_SMALL if header doesn't fit
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS MonRingBufferSnapshot(
-    _Out_writes_bytes_to_(BufferSize, *BytesWritten) PVOID OutputBuffer,
-    _In_ ULONG BufferSize,
-    _Out_ PULONG BytesWritten
-);
+_IRQL_requires_(PASSIVE_LEVEL) NTSTATUS
+    MonRingBufferSnapshot(_Out_writes_bytes_to_(BufferSize, *BytesWritten) PVOID OutputBuffer,
+                          _In_ ULONG BufferSize, _Out_ PULONG BytesWritten);
 
 /**
  * @function   MonRingBufferGetStats
@@ -253,10 +246,7 @@ NTSTATUS MonRingBufferSnapshot(
  *
  * @param[out] Stats - Statistics structure to populate
  */
-_IRQL_requires_max_(DISPATCH_LEVEL)
-VOID MonRingBufferGetStats(
-    _Out_ PMON_RING_BUFFER_STATS Stats
-);
+_IRQL_requires_max_(DISPATCH_LEVEL) VOID MonRingBufferGetStats(_Out_ PMON_RING_BUFFER_STATS Stats);
 
 /**
  * @function   MonRingBufferClear
@@ -266,8 +256,7 @@ VOID MonRingBufferGetStats(
  * @thread-safety Acquires internal lock
  * @side-effects Resets read/write pointers
  */
-_IRQL_requires_(PASSIVE_LEVEL)
-VOID MonRingBufferClear(VOID);
+_IRQL_requires_(PASSIVE_LEVEL) VOID MonRingBufferClear(VOID);
 
 #ifdef __cplusplus
 } /* extern "C" */
