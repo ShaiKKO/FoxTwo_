@@ -5,7 +5,7 @@ Fox2_ is a Windows kernel-mode driver (WDM) designed for monitoring and security
 ## Table of Contents
 
 - [About Fox2_](#about)
-- [Key Features](#features)
+- [Functionality](#features)
 - [Architecture](#architecture)
 - [Security Capabilities](#security)
 - [Requirements](#requirements)
