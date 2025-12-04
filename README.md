@@ -30,7 +30,7 @@ IoRing (I/O Ring) is a high-performance asynchronous I/O interface introduced in
 The driver has been tested against real-world CVEs including CVE-2025-21333, CVE-2024-35250, and techniques demonstrated at Pwn2Own 2024/2025.
 
 <a name="features"></a>
-## Key Features
+## Functionality
 
 | Feature | Module | Description |
 |---------|--------|-------------|
