@@ -35,7 +35,6 @@ Win11MonitorMgr/BuildTools/
 .idea/
 .claude/
 
-# Claude Code instructions (local only)
 CLAUDE.md
 
 # Other temporary files
