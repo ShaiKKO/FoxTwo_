@@ -316,57 +316,6 @@ BOOL CALLBACK MyPreSubmitCallback(
 }
 ```
 
-<a name="codemap"></a>
-## Codemap
-
-### Directory Structure
-
-```
-Fox2_/
-├── client/                     # User-mode client libraries
-│   ├── win11mon_client.c       # Synchronous IOCTL wrapper API (785 lines)
-│   ├── win11mon_client.h       # Client API header
-│   ├── win11mon_intercept.c    # IAT/inline hook interception (1335 lines)
-│   ├── win11mon_intercept.h    # Interception API header
-│   ├── win11mon_profile.c      # Profile/anomaly client APIs (478 lines)
-│   └── win11mon_profile.h      # Profile API header
-├── tools/
-│   └── layout_gen/
-│       └── mc_layout_gen.cpp   # DIA-based _IOP_MC_BUFFER_ENTRY extractor
-├── user/                       # Simple CLI client
-│   ├── monitor_cli.c           # Command-line interface
-│   └── monitor_client.c        # Basic IOCTL wrapper
-├── win11_monitor_mgr.c         # Core driver: DriverEntry, IOCTL dispatcher (1884 lines)
-├── win11_monitor_mgr.h         # Driver public header with IOCTL definitions
-├── monitor_internal.h          # Internal structures and MONITOR_CONTEXT
-├── ioring_enum.c               # IoRing handle enumeration (431 lines)
-├── ioring_enum.h               # Enumeration API
-├── ioring_intercept.c          # SQE validation & policy engine (1068 lines)
-├── ioring_intercept.h          # Interception structures
-├── regbuf_integrity.c          # RegBuffers pointer validation (230 lines)
-├── regbuf_integrity.h          # Integrity check API
-├── pool_tracker.c              # Big pool scanning for target tags (433 lines)
-├── offset_resolver.c           # Dynamic offset resolution (654 lines)
-├── offset_resolver.h           # Offset resolver API
-├── process_profile.c           # Per-process behavior profiling (1017 lines)
-├── process_profile.h           # Profile structures
-├── anomaly_rules.c             # Extensible rule evaluation (512 lines)
-├── anomaly_rules.h             # Anomaly rule definitions
-├── addr_mask.c                 # SipHash-2-4 address masking (364 lines)
-├── addr_mask.h                 # Address masking API
-├── rate_limit.c                # Per-process rate limiting (765 lines)
-├── rate_limit.h                # Rate limit structures
-├── telemetry.c                 # Event queuing facade (168 lines)
-├── telemetry_ringbuf.c         # Lock-free ring buffer (595 lines)
-├── telemetry_ringbuf.h         # Ring buffer API
-├── telemetry_etw.c             # ETW TraceLogging provider (555 lines)
-├── telemetry_etw.h             # ETW event definitions
-├── iop_mc.h                    # _IOP_MC_BUFFER_ENTRY structure
-├── test_harness.c              # In-kernel test driver (799 lines)
-├── test_intercept.c            # Interception unit tests (555 lines)
-└── test_profile.c              # Profile/anomaly unit tests (524 lines)
-```
-
 ### Core Components
 
 | Component | File | Purpose |
